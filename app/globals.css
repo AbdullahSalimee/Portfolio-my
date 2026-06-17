@@ -92,6 +92,7 @@ nav a.active, nav a:hover {
 }
 
 /* PAGE SECTIONS */
+/* PAGE SECTIONS */
 .page {
   position: relative;
   width: 100%;
@@ -101,9 +102,10 @@ nav a.active, nav a:hover {
   justify-content: space-between;
   padding: 80px 48px 48px;
   overflow: hidden;
+  scroll-snap-align: start;   /* ← ADD THIS */
   scroll-snap-stop: always;
+  flex-shrink: 0;             /* ← ADD THIS */
 }
-
 /* CANVAS */
 canvas {
   position: absolute;
@@ -158,6 +160,8 @@ canvas {
   height: 100vh;
   overflow-y: scroll;
   scroll-snap-type: y mandatory;
+  display: flex;          /* ← ADD THIS */
+  flex-direction: column; /* ← ADD THIS */
 }
 .snap-container::-webkit-scrollbar { display: none; }
 

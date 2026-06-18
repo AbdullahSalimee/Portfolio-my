@@ -8,14 +8,13 @@ type Cell = {
   bright: boolean;
   col: number;
   row: number;
-  // falling state
   falling: boolean;
-  fx: number; // world x when detached
-  fy: number; // world y when detached
+  fx: number;
+  fy: number;
   fvx: number;
   fvy: number;
-  flife: number; // 1→0
-  fred: number; // red intensity 0→1
+  flife: number;
+  fred: number;
 };
 
 type Column = {
@@ -38,11 +37,11 @@ export default function LineCanvas() {
       H = 0;
 
     const FONT_SIZE = 12;
-    const COL_W = 11;
-    const ROW_H = 17;
-    const REVEAL_R = 48; // hard inner radius — no circle shown until mouse enters
+    const COL_W = 14; // slightly wider — fewer columns = fewer draw calls
+    const ROW_H = 18;
+    const REVEAL_R = 48;
     const REVEAL_FADE = 32;
-    const BURN_R = 38; // chars inside this get red + fall
+    const BURN_R = 38;
 
     let COLS = 0,
       ROWS = 0;
@@ -97,11 +96,10 @@ export default function LineCanvas() {
     resize();
     window.addEventListener("resize", resize);
 
-    // ── Mouse — document level, only mark inside when over canvas ─
     const onMove = (e: MouseEvent) => {
       const r = c!.getBoundingClientRect();
-      const x = e.clientX - r.left;
-      const y = e.clientY - r.top;
+      const x = e.clientX - r.left,
+        y = e.clientY - r.top;
       mouseRef.current = { x, y, inside: x >= 0 && x <= W && y >= 0 && y <= H };
     };
     const onLeave = () => {
@@ -110,24 +108,21 @@ export default function LineCanvas() {
     document.addEventListener("mousemove", onMove);
     c.addEventListener("mouseleave", onLeave);
 
-    // ── Influence: 1 = full noise, 0 = erased ────────────────────
     function influence(px: number, py: number): number {
       if (!mouseRef.current.inside) return 1;
-      const d = Math.sqrt(
-        (px - mouseRef.current.x) ** 2 + (py - mouseRef.current.y) ** 2,
-      );
+      const d = Math.hypot(px - mouseRef.current.x, py - mouseRef.current.y);
       if (d < REVEAL_R) return 0;
       if (d < REVEAL_R + REVEAL_FADE) return (d - REVEAL_R) / REVEAL_FADE;
       return 1;
     }
 
-    // ── Glitch ────────────────────────────────────────────────────
     let glitchAccum = 0;
     function glitch(dt: number) {
       glitchAccum += dt;
-      if (glitchAccum > 55) {
+      if (glitchAccum > 80) {
+        // less frequent
         glitchAccum = 0;
-        const n = Math.floor(cells.length * 0.012);
+        const n = Math.floor(cells.length * 0.008);
         for (let k = 0; k < n; k++) {
           const cell = cells[Math.floor(Math.random() * cells.length)];
           if (!cell.falling) cell.char = randChar();
@@ -135,18 +130,16 @@ export default function LineCanvas() {
       }
     }
 
-    // ── Detach a cell — it falls under gravity ────────────────────
     function detachCell(cell: Cell, px: number, py: number) {
       if (cell.falling) return;
       cell.falling = true;
       cell.fx = px;
       cell.fy = py;
-      // burst outward from cursor + random
-      const mx = mouseRef.current.x;
-      const my = mouseRef.current.y;
-      const dx = px - mx;
-      const dy = py - my;
-      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const mx = mouseRef.current.x,
+        my = mouseRef.current.y;
+      const dx = px - mx,
+        dy = py - my;
+      const d = Math.hypot(dx, dy) || 1;
       const spd = 1.5 + Math.random() * 2.5;
       cell.fvx = (dx / d) * spd + (Math.random() - 0.5) * 1.5;
       cell.fvy = (dy / d) * spd - Math.random() * 2.0;
@@ -154,10 +147,14 @@ export default function LineCanvas() {
       cell.fred = 1;
     }
 
-    // ── Render loop ───────────────────────────────────────────────
     let lastT = 0,
       frameId: number;
     const GRAVITY = 0.22;
+
+    // Reusable bucket arrays for batching draws by style
+    // We batch: bright cells, dim cells (by opacity bucket), falling cells
+    const brightCells: Cell[] = [];
+    const dimCells: Cell[] = [];
 
     function frame(now: number) {
       const dt = Math.min(now - lastT, 32);
@@ -169,14 +166,13 @@ export default function LineCanvas() {
 
       glitch(dt);
 
-      const mx = mouseRef.current.x;
-      const my = mouseRef.current.y;
+      const mx = mouseRef.current.x,
+        my = mouseRef.current.y;
       const inside = mouseRef.current.inside;
 
-      // ── Update columns ──────────────────────────────────────────
+      // Update columns
       for (let col = 0; col < COLS; col++) {
         const column = columns[col];
-
         if (!column.active) {
           column.pauseT -= dt;
           if (column.pauseT <= 0) {
@@ -186,23 +182,18 @@ export default function LineCanvas() {
           }
           continue;
         }
-
         column.headY += (column.speed * dt) / 1000;
         if (column.headY > H + ROW_H * 3) {
           column.active = false;
           column.pauseT = 400 + Math.random() * 3000;
         }
-
         const trailLen = H * 0.52;
         const start = col * ROWS;
-
         for (let row = 0; row < ROWS; row++) {
           const cell = cells[start + row];
           if (cell.falling) continue;
-
           const cellY = row * ROW_H;
           const dist = column.headY - cellY;
-
           if (dist < 0) {
             cell.opacity = 0;
             cell.bright = false;
@@ -214,55 +205,76 @@ export default function LineCanvas() {
             cell.bright = false;
           }
 
-          // Check burn zone — detach if inside cursor radius
           if (inside && cell.opacity > 0.05) {
             const px = col * COL_W + COL_W * 0.5;
             const py = row * ROW_H + ROW_H * 0.5;
-            const d = Math.sqrt((px - mx) ** 2 + (py - my) ** 2);
-            if (d < BURN_R) {
+            if (Math.hypot(px - mx, py - my) < BURN_R)
               detachCell(cell, col * COL_W, row * ROW_H);
-            }
           }
         }
       }
 
-      // ── Draw static cells ───────────────────────────────────────
-      for (let col = 0; col < COLS; col++) {
-        const start = col * ROWS;
-        const px = col * COL_W + 1;
+      // --- BATCHED DRAW: sort into bright vs dim, then draw each group with one fillStyle ---
+      brightCells.length = 0;
+      dimCells.length = 0;
 
+      for (let col = 0; col < COLS; col++) {
+        const px = col * COL_W + 1;
+        const start = col * ROWS;
         for (let row = 0; row < ROWS; row++) {
           const cell = cells[start + row];
           if (cell.falling || cell.opacity < 0.008) continue;
-
           const py = row * ROW_H;
           const inf = influence(px + COL_W * 0.5, py + ROW_H * 0.5);
           const a = cell.opacity * inf;
           if (a < 0.008) continue;
-
-          if (cell.bright) {
-            ctx.fillStyle = `rgba(255,255,255,${(a * 0.92).toFixed(3)})`;
-          } else {
-            const v = Math.floor(180 + cell.opacity * 60);
-            ctx.fillStyle = `rgba(${v},${v},${v},${(a * 0.62).toFixed(3)})`;
-          }
-          ctx.fillText(cell.char, px, py);
+          if (cell.bright) brightCells.push(cell);
+          else dimCells.push(cell);
         }
       }
 
-      // ── Draw + physics for falling cells ────────────────────────
+      // Draw bright cells
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.globalAlpha = 1;
+      for (const cell of brightCells) {
+        const px = cell.col * COL_W + 1;
+        const py = cell.row * ROW_H;
+        const inf = influence(px + COL_W * 0.5, py + ROW_H * 0.5);
+        ctx.globalAlpha = inf * 0.92;
+        ctx.fillText(cell.char, px, py);
+      }
+
+      // Draw dim cells — group by rounded opacity to minimize fillStyle thrash
+      // Sort by opacity bucket (4 buckets) so we set fillStyle less often
+      dimCells.sort((a, b) => (a.opacity > b.opacity ? -1 : 1));
+      let lastBucket = -1;
+      for (const cell of dimCells) {
+        const px = cell.col * COL_W + 1;
+        const py = cell.row * ROW_H;
+        const inf = influence(px + COL_W * 0.5, py + ROW_H * 0.5);
+        const a = cell.opacity * inf;
+        // Bucket opacity into 5 bands to reduce fillStyle changes
+        const bucket = Math.round(a * 4);
+        if (bucket !== lastBucket) {
+          const v = Math.floor(140 + (bucket / 4) * 80);
+          ctx.fillStyle = `rgb(${v},${v},${v})`;
+          ctx.globalAlpha = 0.62;
+          lastBucket = bucket;
+        }
+        ctx.fillText(cell.char, px, py);
+      }
+      ctx.globalAlpha = 1;
+
+      // Falling cells
       for (const cell of cells) {
         if (!cell.falling) continue;
-
         cell.fvy += (GRAVITY * dt) / 16;
         cell.fvx *= 0.992;
         cell.fx += (cell.fvx * dt) / 16;
         cell.fy += (cell.fvy * dt) / 16;
         cell.flife -= dt * 0.018;
         cell.fred -= dt * 0.008;
-
         if (cell.flife <= 0 || cell.fy > H + 40) {
-          // Respawn as a fresh static cell
           cell.falling = false;
           cell.opacity = 0;
           cell.bright = false;
@@ -270,28 +282,21 @@ export default function LineCanvas() {
           cell.char = randChar();
           continue;
         }
-
         const e = cell.flife * cell.flife;
         const red = Math.max(0, cell.fred);
-        const r = Math.floor(220 + red * 35);
-        const g = Math.floor(30 + (1 - red) * 180);
-        const b = Math.floor(30 + (1 - red) * 180);
-        const a = e * 0.88;
-
-        ctx.fillStyle = `rgba(${r},${g},${b},${a.toFixed(3)})`;
+        ctx.fillStyle = `rgba(${Math.floor(220 + red * 35)},${Math.floor(30 + (1 - red) * 180)},${Math.floor(30 + (1 - red) * 180)},${(e * 0.88).toFixed(2)})`;
         ctx.fillText(cell.char, cell.fx, cell.fy);
       }
 
-      // ── Cursor — only draw ring if inside ──────────────────────
+      // Cursor
       if (inside) {
-        // Inner boundary ring
+        ctx.globalAlpha = 1;
         ctx.beginPath();
         ctx.arc(mx, my, REVEAL_R, 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(240,240,240,0.18)";
         ctx.lineWidth = 0.7;
         ctx.stroke();
 
-        // Crosshair — gapped arms
         const ARM = 10,
           GAP = 5;
         ctx.strokeStyle = "rgba(240,240,240,0.32)";
@@ -307,7 +312,6 @@ export default function LineCanvas() {
         ctx.lineTo(mx, my + ARM + GAP);
         ctx.stroke();
 
-        // Center dot
         ctx.beginPath();
         ctx.arc(mx, my, 1.8, 0, Math.PI * 2);
         ctx.fillStyle = "rgba(255,255,255,0.85)";

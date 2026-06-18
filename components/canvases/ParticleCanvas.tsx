@@ -82,8 +82,8 @@ export default function ParticleCanvas() {
     }
 
     // --- Black hole core ---------------------------------------------
-    const CORE_R = 16; // event horizon radius, in CSS px (scaled by dpr at draw time)
-    const DISK_R = 46; // outer extent of the accretion disk glow
+    const CORE_R = 16;
+    const DISK_R = 46;
 
     function drawBlackHole() {
       const cx = W / 2;
@@ -91,8 +91,6 @@ export default function ParticleCanvas() {
       const core = CORE_R * dpr;
       const disk = DISK_R * dpr;
 
-      // Wide, dim vignette-style glow — sets the "space" mood without
-      // washing out the scene. Cool white/blue, very low alpha at edges.
       const outerGlow = ctx!.createRadialGradient(
         cx,
         cy,
@@ -109,9 +107,6 @@ export default function ParticleCanvas() {
       ctx!.arc(cx, cy, disk * 2.4, 0, Math.PI * 2);
       ctx!.fill();
 
-      // Accretion disk: thin tilted ellipse, brighter on the side that
-      // would be sweeping toward the viewer (simple Doppler-style fake).
-      // Pure white-hot at the inner edge, cooling to pale blue-white out.
       const tilt = 0.34;
       const spin = t * 0.6;
 
@@ -119,8 +114,6 @@ export default function ParticleCanvas() {
       ctx!.translate(cx, cy);
 
       for (let pass = 0; pass < 2; pass++) {
-        // pass 0: back half of disk (drawn first, dimmer)
-        // pass 1: front half of disk (drawn after core, brighter)
         const startA = pass === 0 ? Math.PI : 0;
         const endA = pass === 0 ? Math.PI * 2 : Math.PI;
         const segs = 56;
@@ -139,12 +132,9 @@ export default function ParticleCanvas() {
           const x2 = Math.cos(a0 + spin) * rr1;
           const y2 = Math.sin(a0 + spin) * rr1 * tilt;
 
-          // brightness peaks at the "approaching" side (am near -PI/2)
           const brightness =
             0.25 +
             0.75 * Math.max(0, Math.sin(am - Math.PI / 2) * -1 + 1) * 0.5;
-          // cool white-blue throughout — brighter side leans pure white,
-          // dimmer side cools toward a soft blue
           const lightness = 82 + brightness * 14;
           const sat = 25 - brightness * 15;
           const alpha =
@@ -164,17 +154,11 @@ export default function ParticleCanvas() {
         }
 
         if (pass === 0) {
-          // Event horizon: pure black core, drawn between the two disk
-          // passes so the front half of the disk occludes it correctly.
           ctx!.beginPath();
           ctx!.arc(0, 0, core, 0, Math.PI * 2);
           ctx!.fillStyle = "#000";
           ctx!.fill();
 
-          // Photon-ring rim: crisp bright white, the classic "lensed
-          // light bent around the horizon" look, with a faint secondary
-          // ring just outside it for extra depth. A slow pulse keeps it
-          // feeling alive rather than static.
           const pulse = 0.82 + 0.18 * Math.sin(t * 4.2);
           ctx!.beginPath();
           ctx!.arc(0, 0, core * 1.03, 0, Math.PI * 2);
@@ -215,18 +199,22 @@ export default function ParticleCanvas() {
     function drawNodes() {
       ctx!.font = `${Math.round(11 * dpr)}px 'Space Mono', monospace`;
 
-      orbits.forEach((o) => {
+      // Set of indices that get the red accent
+      const redNodes = new Set([8, 9, 10]); // Python, LangChain, OpenAI
+
+      orbits.forEach((o, idx) => {
         o.angle += o.speed;
         const x = W / 2 + Math.cos(o.angle) * o.r * dpr;
         const y = H / 2 + Math.sin(o.angle) * o.r * o.tilt * dpr;
-        const depth = Math.sin(o.angle) * 0.5 + 0.5; // 0 = far side, 1 = near side
+        const depth = Math.sin(o.angle) * 0.5 + 0.5;
         const alpha = 0.25 + depth * 0.6;
 
-        // Maintain a short motion trail for a comet-like streak
+        const isRed = redNodes.has(idx);
+
         o.trail.unshift({ x, y, a: alpha });
         if (o.trail.length > 10) o.trail.pop();
 
-        // Trail (faint streak behind the node, fading out) — cool white
+        // Trail
         for (let i = o.trail.length - 1; i > 0; i--) {
           const p0 = o.trail[i];
           const p1 = o.trail[i - 1];
@@ -234,34 +222,45 @@ export default function ParticleCanvas() {
           ctx!.beginPath();
           ctx!.moveTo(p0.x, p0.y);
           ctx!.lineTo(p1.x, p1.y);
-          ctx!.strokeStyle = `rgba(225, 235, 255, ${fade})`;
+          if (isRed) {
+            ctx!.strokeStyle = `rgba(255, 140, 110, ${fade})`;
+          } else {
+            ctx!.strokeStyle = `rgba(225, 235, 255, ${fade})`;
+          }
           ctx!.lineWidth = (0.4 + depth * 1.1) * dpr;
           ctx!.stroke();
         }
 
-        // Soft glow halo behind the node
+        // Glow halo
         const glowR = (5 + depth * 5) * dpr;
         const glow = ctx!.createRadialGradient(x, y, 0, x, y, glowR);
-        glow.addColorStop(0, `rgba(235, 242, 255, ${alpha * 0.55})`);
-        glow.addColorStop(1, "rgba(235, 242, 255, 0)");
+        if (isRed) {
+          glow.addColorStop(0, `rgba(255, 150, 120, ${alpha * 0.55})`);
+          glow.addColorStop(1, "rgba(255, 100, 70, 0)");
+        } else {
+          glow.addColorStop(0, `rgba(235, 242, 255, ${alpha * 0.55})`);
+          glow.addColorStop(1, "rgba(235, 242, 255, 0)");
+        }
         ctx!.beginPath();
         ctx!.fillStyle = glow;
         ctx!.arc(x, y, glowR, 0, Math.PI * 2);
         ctx!.fill();
 
-        // Node core — bright white, with a touch of shadow-blur for a
-        // gentle bloom (cinematic point-light look)
+        // Node core
         ctx!.beginPath();
-        ctx!.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx!.shadowColor = "rgba(255, 255, 255, 0.6)";
+        if (isRed) {
+          ctx!.fillStyle = `rgba(255, 190, 160, ${alpha})`;
+          ctx!.shadowColor = "rgba(255, 120, 80, 0.6)";
+        } else {
+          ctx!.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+          ctx!.shadowColor = "rgba(255, 255, 255, 0.6)";
+        }
         ctx!.shadowBlur = 4 * dpr;
         ctx!.arc(x, y, (1.6 + depth * 1.6) * dpr, 0, Math.PI * 2);
         ctx!.fill();
         ctx!.shadowBlur = 0;
 
-        // Connector tick — fixed length and a fixed outward direction,
-        // independent of which side of the orbit we're on, so it never
-        // snaps. Direction is simply "away from center".
+        // Connector tick
         const dirX = Math.cos(o.angle);
         const dirY = Math.sin(o.angle) * o.tilt;
         const dirLen = Math.hypot(dirX, dirY) || 1;
@@ -274,20 +273,18 @@ export default function ParticleCanvas() {
         ctx!.beginPath();
         ctx!.moveTo(x, y);
         ctx!.lineTo(lx, ly);
-        ctx!.strokeStyle = `rgba(225, 235, 255, ${alpha * 0.35})`;
+        if (isRed) {
+          ctx!.strokeStyle = `rgba(255, 160, 130, ${alpha * 0.45})`;
+        } else {
+          ctx!.strokeStyle = `rgba(225, 235, 255, ${alpha * 0.35})`;
+        }
         ctx!.lineWidth = 0.5 * dpr;
         ctx!.stroke();
 
-        // Label: anchored left or right of the tick depending on which
-        // side of the black hole the node is on. The flip itself is
-        // unavoidable (a left-side label reads naturally rightward,
-        // a right-side label needs to anchor from its own right edge),
-        // but we smooth the transition by fading the label out as it
-        // approaches the flip point (ux near 0) and back in after,
-        // so there's no visible snap — just a brief fade.
+        // Label
         ctx!.textBaseline = "middle";
         const pad = 7 * dpr;
-        const flipFade = Math.min(1, Math.abs(ux) / 0.18); // 0 near the flip, 1 away from it
+        const flipFade = Math.min(1, Math.abs(ux) / 0.18);
         const labelAlpha = (0.3 + depth * 0.5) * flipFade;
 
         if (labelAlpha > 0.01) {
@@ -325,3 +322,4 @@ export default function ParticleCanvas() {
 
   return <canvas id="particle-canvas" ref={canvasRef} />;
 }
+  

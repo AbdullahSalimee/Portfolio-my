@@ -27,14 +27,20 @@ export default function Home() {
               <br />
               SALIMEE
             </div>
-            <div className="hero-title">Frontend Engineer &amp; UI Architect</div>
+            <div className="hero-title">
+              Frontend Engineer &amp; UI Architect
+            </div>
           </div>
           <div className="hero-sub">
             Here&apos;s my approach, whether it&apos;s building
             <br />
             interfaces or intelligent systems.
           </div>
-          <div className="hero-tagline">Build. Integrate. Ship.</div>
+          <div className="hero-tagline">
+            Build<span className="text-red-400">.</span> Integrate
+            <span className="text-red-400">.</span> Ship
+            <span className="text-red-400">.</span>
+          </div>
         </div>
 
         {/* SECTION 2 */}
@@ -44,9 +50,13 @@ export default function Home() {
             <strong>UI-first thinking matters.</strong>
             <br />
             Clean code isn&apos;t enough —<br />
-            <strong>what you build</strong> and <strong>how it feels</strong> is everything.
+            <strong>what you build</strong> and <strong>how it feels</strong> is
+            everything.
           </div>
-          <div className="section-quote">Consistency is the foundation of trust</div>
+          <div className="section-quote">
+            Consistency is the foundation of{" "}
+            <span className="text-red-400">trust</span>
+          </div>
         </div>
 
         {/* SECTION 3 */}
@@ -55,11 +65,15 @@ export default function Home() {
           <div className="section-top-right">
             AI can generate. AI can refactor.
             <br />
-            But <strong>design taste</strong> and <strong>system thinking</strong>?
+            But <strong>design taste</strong> and{" "}
+            <strong>system thinking</strong>?
             <br />
             That&apos;s still on us.
           </div>
-          <div className="section-quote">Do we need code..? or experiences?</div>
+          <div className="section-quote">
+            Do we need <span className="text-red-400">code</span>..? or{" "}
+            <span className="text-red-400">experiences</span>?
+          </div>
         </div>
 
         {/* SECTION 4 */}
@@ -70,7 +84,9 @@ export default function Home() {
             <br />
             Building with <strong>adaptability</strong> baked in.
           </div>
-          <div className="section-quote">Cause &amp; Effect</div>
+          <div className="section-quote">
+            <span className="text-red-400">Cause</span> &amp; Effect
+          </div>
         </div>
 
         {/* SECTION 5 */}
@@ -83,7 +99,10 @@ export default function Home() {
             <br />
             <strong>Sounds interesting? Let&apos;s connect..</strong>
           </div>
-          <div className="section-quote">You bring the vision, I&apos;ll build the thing</div>
+          <div className="section-quote">
+            You bring the <span className="text-red-400">vision</span>,
+            I&apos;ll build the thing
+          </div>
         </div>
       </div>
     </>

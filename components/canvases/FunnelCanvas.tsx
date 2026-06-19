@@ -11,7 +11,6 @@ type Particle = {
   vy: number;
   size: number;
   shade: number;
-  isRed?: boolean;
 };
 
 type Pt = { x: number; y: number };
@@ -47,9 +46,9 @@ export default function FunnelCanvas() {
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseleave", onLeave);
 
-    // Reduced from 460 → 280. Visually identical at this density.
-    const COUNT = 280;
+    const COUNT = 460;
 
+    // --- helpers ---------------------------------------------------
     function lerpPt(a: Pt, b: Pt, u: number): Pt {
       return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
     }
@@ -64,12 +63,11 @@ export default function FunnelCanvas() {
       const pts: Pt[] = [];
       for (let i = 0; i < count; i++) {
         const a = Math.random() * Math.PI * 2;
-        const lx = Math.cos(a) * rx,
-          ly = Math.sin(a) * ry;
-        pts.push({
-          x: cx + lx * Math.cos(rot) - ly * Math.sin(rot),
-          y: cy + lx * Math.sin(rot) + ly * Math.cos(rot),
-        });
+        const lx = Math.cos(a) * rx;
+        const ly = Math.sin(a) * ry;
+        const x = cx + lx * Math.cos(rot) - ly * Math.sin(rot);
+        const y = cy + lx * Math.sin(rot) + ly * Math.cos(rot);
+        pts.push({ x, y });
       }
       return pts;
     }
@@ -128,21 +126,21 @@ export default function FunnelCanvas() {
     ) {
       const pts: Pt[] = [];
       for (let i = 0; i < count; i++) {
-        const u = Math.random(),
-          v = 1 - u;
+        const u = Math.random();
+        const v = 1 - u;
+        const x =
+          v * v * v * p0.x +
+          3 * v * v * u * p1.x +
+          3 * v * u * u * p2.x +
+          u * u * u * p3.x;
+        const y =
+          v * v * v * p0.y +
+          3 * v * v * u * p1.y +
+          3 * v * u * u * p2.y +
+          u * u * u * p3.y;
         pts.push({
-          x:
-            v * v * v * p0.x +
-            3 * v * v * u * p1.x +
-            3 * v * u * u * p2.x +
-            u * u * u * p3.x +
-            (Math.random() - 0.5) * jitter,
-          y:
-            v * v * v * p0.y +
-            3 * v * v * u * p1.y +
-            3 * v * u * u * p2.y +
-            u * u * u * p3.y +
-            (Math.random() - 0.5) * jitter,
+          x: x + (Math.random() - 0.5) * jitter,
+          y: y + (Math.random() - 0.5) * jitter,
         });
       }
       return pts;
@@ -156,8 +154,8 @@ export default function FunnelCanvas() {
     ) {
       const pts: Pt[] = [];
       for (let i = 0; i < count; i++) {
-        const a = Math.random() * Math.PI * 2,
-          r = Math.sqrt(Math.random());
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(Math.random());
         pts.push({
           x: cx + Math.cos(a) * rx * r,
           y: cy + Math.sin(a) * ry * r,
@@ -174,241 +172,215 @@ export default function FunnelCanvas() {
     ) {
       const pts: Pt[] = [];
       for (let i = 0; i < count; i++) {
-        const a = Math.random() * Math.PI * 2,
-          rr = r + (Math.random() - 0.5) * jitter;
+        const a = Math.random() * Math.PI * 2;
+        const rr = r + (Math.random() - 0.5) * jitter;
         pts.push({ x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr });
       }
       return pts;
     }
 
+    // --- shapes, in local -1..1 space, outline-traced for clarity ---
+
     function reactPoints(n: number): Pt[] {
-      const nucleus = Math.floor(n * 0.05),
-        perOrbit = Math.floor((n - nucleus) / 3);
+      const nucleus = Math.floor(n * 0.05);
+      const perOrbit = Math.floor((n - nucleus) / 3);
       const pts: Pt[] = filledBlob(0, 0, 0.09, 0.09, nucleus);
-      for (let ring = 0; ring < 3; ring++)
-        pts.push(
-          ...pointsOnEllipse(0, 0, 0.95, 0.36, (ring * Math.PI) / 3, perOrbit),
-        );
+      for (let ring = 0; ring < 3; ring++) {
+        const rot = (ring * Math.PI) / 3;
+        pts.push(...pointsOnEllipse(0, 0, 0.95, 0.36, rot, perOrbit));
+      }
       return pts;
     }
+
     function nextPoints(n: number): Pt[] {
-      const nBars = Math.floor(n * 0.32),
-        nDiag = n - nBars * 2;
+      const leftBar: Pt[] = [
+        { x: -0.78, y: -0.85 },
+        { x: -0.78, y: 0.85 },
+      ];
+      const rightBar: Pt[] = [
+        { x: 0.78, y: -0.85 },
+        { x: 0.78, y: 0.85 },
+      ];
+      const diagOuter: Pt[] = [
+        { x: -0.78, y: -0.85 },
+        { x: 0.78, y: 0.85 },
+      ];
+      const diagInner: Pt[] = [
+        { x: -0.6, y: -0.85 },
+        { x: 0.78, y: 0.6 },
+      ];
+      const nBars = Math.floor(n * 0.32);
+      const nDiag = n - nBars * 2;
       const pts: Pt[] = [];
-      pts.push(
-        ...pointsOnPolyline(
-          [
-            { x: -0.78, y: -0.85 },
-            { x: -0.78, y: 0.85 },
-          ],
-          nBars,
-          0.05,
-        ),
-      );
-      pts.push(
-        ...pointsOnPolyline(
-          [
-            { x: 0.78, y: -0.85 },
-            { x: 0.78, y: 0.85 },
-          ],
-          nBars,
-          0.05,
-        ),
-      );
-      pts.push(
-        ...pointsOnPolyline(
-          [
-            { x: -0.78, y: -0.85 },
-            { x: 0.78, y: 0.85 },
-          ],
-          Math.floor(nDiag / 2),
-          0.04,
-        ),
-      );
-      pts.push(
-        ...pointsOnPolyline(
-          [
-            { x: -0.6, y: -0.85 },
-            { x: 0.78, y: 0.6 },
-          ],
-          Math.ceil(nDiag / 2),
-          0.04,
-        ),
-      );
+      pts.push(...pointsOnPolyline(leftBar, nBars, 0.05));
+      pts.push(...pointsOnPolyline(rightBar, nBars, 0.05));
+      pts.push(...pointsOnPolyline(diagOuter, Math.floor(nDiag / 2), 0.04));
+      pts.push(...pointsOnPolyline(diagInner, Math.ceil(nDiag / 2), 0.04));
       return pts;
     }
+
     function tsPoints(n: number): Pt[] {
-      const half = Math.floor(n / 2),
-        pts: Pt[] = [];
-      pts.push(
-        ...pointsOnPolyline(
-          [
-            { x: -0.95, y: -0.78 },
-            { x: -0.15, y: -0.78 },
-          ],
-          Math.floor(half * 0.4),
-          0.05,
-        ),
-      );
-      pts.push(
-        ...pointsOnPolyline(
-          [
-            { x: -0.55, y: -0.78 },
-            { x: -0.55, y: 0.78 },
-          ],
-          Math.floor(half * 0.6),
-          0.05,
-        ),
-      );
-      pts.push(
-        ...pointsOnPolyline(
-          [
-            { x: 0.82, y: -0.78 },
-            { x: 0.18, y: -0.78 },
-            { x: 0.18, y: -0.1 },
-            { x: 0.82, y: -0.1 },
-            { x: 0.82, y: 0.78 },
-            { x: 0.18, y: 0.78 },
-          ],
-          n - pts.length,
-          0.05,
-        ),
-      );
+      const half = Math.floor(n / 2);
+      const pts: Pt[] = [];
+      const tTop: Pt[] = [
+        { x: -0.95, y: -0.78 },
+        { x: -0.15, y: -0.78 },
+      ];
+      const tStem: Pt[] = [
+        { x: -0.55, y: -0.78 },
+        { x: -0.55, y: 0.78 },
+      ];
+      pts.push(...pointsOnPolyline(tTop, Math.floor(half * 0.4), 0.05));
+      pts.push(...pointsOnPolyline(tStem, Math.floor(half * 0.6), 0.05));
+      const sPath: Pt[] = [
+        { x: 0.82, y: -0.78 },
+        { x: 0.18, y: -0.78 },
+        { x: 0.18, y: -0.1 },
+        { x: 0.82, y: -0.1 },
+        { x: 0.82, y: 0.78 },
+        { x: 0.18, y: 0.78 },
+      ];
+      pts.push(...pointsOnPolyline(sPath, n - pts.length, 0.05));
       return pts;
     }
+
     function nodePoints(n: number): Pt[] {
       const hexVerts: Pt[] = [];
       for (let i = 0; i <= 6; i++) {
         const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
         hexVerts.push({ x: Math.cos(a) * 0.92, y: Math.sin(a) * 0.92 });
       }
-      const pts = pointsOnPolyline(hexVerts, Math.floor(n * 0.7), 0.03);
-      pts.push(...filledBlob(0, 0, 0.5, 0.5, n - pts.length));
+      const outline = Math.floor(n * 0.7);
+      const fill = n - outline;
+      const pts = pointsOnPolyline(hexVerts, outline, 0.03);
+      pts.push(...filledBlob(0, 0, 0.5, 0.5, fill));
       return pts;
     }
+
     function tailwindPoints(n: number): Pt[] {
       function wave(yOff: number, ampSign: number, count: number) {
         const verts: Pt[] = [];
-        for (let i = 0; i <= 18; i++) {
-          const u = i / 18;
-          verts.push({
-            x: -0.95 + u * 1.9,
-            y:
-              yOff +
-              Math.sin(u * Math.PI * 1.3) * 0.3 * ampSign * (1 - u * 0.3),
-          });
+        const steps = 24;
+        for (let i = 0; i <= steps; i++) {
+          const u = i / steps;
+          const x = -0.95 + u * 1.9;
+          const y =
+            yOff + Math.sin(u * Math.PI * 1.3) * 0.3 * ampSign * (1 - u * 0.3);
+          verts.push({ x, y });
         }
         return pointsOnPolyline(verts, count, 0.035);
       }
       const half = Math.floor(n / 2);
-      return [...wave(-0.25, 1, half), ...wave(0.25, -1, n - half)];
+      const pts: Pt[] = [];
+      pts.push(...wave(-0.25, 1, half));
+      pts.push(...wave(0.25, -1, n - half));
+      return pts;
     }
+
     function pythonPoints(n: number): Pt[] {
       const half = Math.floor(n / 2);
-      return [
-        ...filledBlob(-0.18, -0.32, 0.55, 0.42, half),
-        ...filledBlob(0.18, 0.32, 0.55, 0.42, n - half),
-      ];
+      const pts: Pt[] = [];
+      pts.push(...filledBlob(-0.18, -0.32, 0.55, 0.42, half));
+      pts.push(...filledBlob(0.18, 0.32, 0.55, 0.42, n - half));
+      return pts;
     }
+
     function gitPoints(n: number): Pt[] {
-      const nLine = Math.floor(n * 0.55),
-        pts: Pt[] = [];
-      pts.push(
-        ...pointsOnPolyline(
-          [
-            { x: -0.35, y: -0.85 },
-            { x: -0.35, y: 0.85 },
-          ],
-          Math.floor(nLine * 0.6),
-          0.035,
-        ),
-      );
-      pts.push(
-        ...pointsOnPolyline(
-          [
-            { x: -0.35, y: -0.1 },
-            { x: 0.55, y: -0.75 },
-          ],
-          Math.floor(nLine * 0.4),
-          0.035,
-        ),
-      );
-      const perNode = Math.floor((n - pts.length) / 3);
-      [
+      const trunk: Pt[] = [
+        { x: -0.35, y: -0.85 },
+        { x: -0.35, y: 0.85 },
+      ];
+      const branch: Pt[] = [
+        { x: -0.35, y: -0.1 },
+        { x: 0.55, y: -0.75 },
+      ];
+      const nLine = Math.floor(n * 0.55);
+      const pts: Pt[] = [];
+      pts.push(...pointsOnPolyline(trunk, Math.floor(nLine * 0.6), 0.035));
+      pts.push(...pointsOnPolyline(branch, Math.floor(nLine * 0.4), 0.035));
+      const nodeCount = n - pts.length;
+      const perNode = Math.floor(nodeCount / 3);
+      const nodeCenters: Pt[] = [
         { x: -0.35, y: -0.85 },
         { x: -0.35, y: 0.85 },
         { x: 0.62, y: -0.85 },
-      ].forEach((center, i) => {
-        const count = i === 2 ? n - pts.length - perNode * 2 : perNode;
+      ];
+      nodeCenters.forEach((center, i) => {
+        const count = i === 2 ? nodeCount - perNode * 2 : perNode;
         pts.push(...pointsOnEllipse(center.x, center.y, 0.16, 0.16, 0, count));
       });
       return pts;
     }
+
     function n8nPoints(n: number): Pt[] {
+      // n8n mark: three circular nodes connected by two bent links,
+      // matching the actual node-chain logo structure.
       const nodeCenters: Pt[] = [
         { x: -0.8, y: 0.55 },
         { x: 0.05, y: -0.7 },
         { x: 0.82, y: 0.45 },
       ];
-      const perNode = Math.floor(n * 0.18),
-        pts: Pt[] = [];
+      const nodeR = 0.22;
+      const perNode = Math.floor(n * 0.18);
+      const pts: Pt[] = [];
       nodeCenters.forEach((c) =>
-        pts.push(...ringPoints(c.x, c.y, 0.22, perNode, 0.025)),
+        pts.push(...ringPoints(c.x, c.y, nodeR, perNode, 0.025)),
       );
-      const rem = n - pts.length;
+      const link1: Pt[] = [nodeCenters[0], nodeCenters[1]];
+      const link2: Pt[] = [nodeCenters[1], nodeCenters[2]];
+      const remaining = n - pts.length;
+      pts.push(...pointsOnPolyline(link1, Math.floor(remaining / 2), 0.025));
       pts.push(
         ...pointsOnPolyline(
-          [nodeCenters[0], nodeCenters[1]],
-          Math.floor(rem / 2),
-          0.025,
-        ),
-      );
-      pts.push(
-        ...pointsOnPolyline(
-          [nodeCenters[1], nodeCenters[2]],
-          rem - Math.floor(rem / 2),
+          link2,
+          remaining - Math.floor(remaining / 2),
           0.025,
         ),
       );
       return pts;
     }
+
     function sveltePoints(n: number): Pt[] {
-      return [
-        ...pointsOnBezier(
-          { x: -0.75, y: -0.15 },
-          { x: -0.95, y: -0.85 },
-          { x: 0.55, y: -0.95 },
-          { x: 0.6, y: -0.25 },
-          Math.floor(n * 0.32),
-          0.04,
-        ),
-        ...pointsOnBezier(
-          { x: -0.5, y: -0.15 },
-          { x: -0.6, y: -0.6 },
-          { x: 0.3, y: -0.65 },
-          { x: 0.32, y: -0.22 },
-          Math.floor(n * 0.18),
-          0.035,
-        ),
-        ...pointsOnBezier(
-          { x: 0.75, y: 0.15 },
-          { x: 0.95, y: 0.85 },
-          { x: -0.55, y: 0.95 },
-          { x: -0.6, y: 0.25 },
-          Math.floor(n * 0.32),
-          0.04,
-        ),
-        ...pointsOnBezier(
-          { x: 0.5, y: 0.15 },
-          { x: 0.6, y: 0.6 },
-          { x: -0.3, y: 0.65 },
-          { x: -0.32, y: 0.22 },
-          Math.floor(n * 0.18),
-          0.035,
-        ),
-      ];
+      // Svelte's bent "S" ribbon — two opposing hook/arc shapes
+      // interlocking, traced as a continuous curved path.
+      const upper = pointsOnBezier(
+        { x: -0.75, y: -0.15 },
+        { x: -0.95, y: -0.85 },
+        { x: 0.55, y: -0.95 },
+        { x: 0.6, y: -0.25 },
+        Math.floor(n * 0.32),
+        0.04,
+      );
+      const upperInner = pointsOnBezier(
+        { x: -0.5, y: -0.15 },
+        { x: -0.6, y: -0.6 },
+        { x: 0.3, y: -0.65 },
+        { x: 0.32, y: -0.22 },
+        Math.floor(n * 0.18),
+        0.035,
+      );
+      const lower = pointsOnBezier(
+        { x: 0.75, y: 0.15 },
+        { x: 0.95, y: 0.85 },
+        { x: -0.55, y: 0.95 },
+        { x: -0.6, y: 0.25 },
+        Math.floor(n * 0.32),
+        0.04,
+      );
+      const lowerInner = pointsOnBezier(
+        { x: 0.5, y: 0.15 },
+        { x: 0.6, y: 0.6 },
+        { x: -0.3, y: 0.65 },
+        { x: -0.32, y: 0.22 },
+        n - upper.length - upperInner.length - lower.length,
+        0.035,
+      );
+      return [...upper, ...upperInner, ...lower, ...lowerInner];
     }
+
     function htmlPoints(n: number): Pt[] {
+      // HTML5 shield badge: pentagon-ish shield outline with an
+      // angle-bracket "<>" mark traced inside.
       const shield: Pt[] = [
         { x: -0.85, y: -0.9 },
         { x: 0.85, y: -0.9 },
@@ -416,37 +388,36 @@ export default function FunnelCanvas() {
         { x: 0, y: 0.92 },
         { x: -0.7, y: 0.55 },
       ];
-      const pts = pointsOnPolyline(
-        [...shield, shield[0]],
-        Math.floor(n * 0.6),
-        0.03,
+      const shieldClosed = [...shield, shield[0]];
+      const outlineCount = Math.floor(n * 0.6);
+      const pts = pointsOnPolyline(shieldClosed, outlineCount, 0.03);
+      const bracketLeft: Pt[] = [
+        { x: 0.05, y: -0.25 },
+        { x: -0.32, y: 0.05 },
+        { x: 0.05, y: 0.35 },
+      ];
+      const bracketRight: Pt[] = [
+        { x: -0.05, y: -0.25 },
+        { x: 0.32, y: 0.05 },
+        { x: -0.05, y: 0.35 },
+      ];
+      const remaining = n - pts.length;
+      pts.push(
+        ...pointsOnPolyline(bracketLeft, Math.floor(remaining / 2), 0.03),
       );
-      const rem = n - pts.length;
       pts.push(
         ...pointsOnPolyline(
-          [
-            { x: 0.05, y: -0.25 },
-            { x: -0.32, y: 0.05 },
-            { x: 0.05, y: 0.35 },
-          ],
-          Math.floor(rem / 2),
-          0.03,
-        ),
-      );
-      pts.push(
-        ...pointsOnPolyline(
-          [
-            { x: -0.05, y: -0.25 },
-            { x: 0.32, y: 0.05 },
-            { x: -0.05, y: 0.35 },
-          ],
-          rem - Math.floor(rem / 2),
+          bracketRight,
+          remaining - Math.floor(remaining / 2),
           0.03,
         ),
       );
       return pts;
     }
+
     function cssPoints(n: number): Pt[] {
+      // CSS3 shield badge — same silhouette as HTML5 but with a
+      // stylized "#" hash mark traced inside instead of brackets.
       const shield: Pt[] = [
         { x: -0.85, y: -0.9 },
         { x: 0.85, y: -0.9 },
@@ -454,11 +425,9 @@ export default function FunnelCanvas() {
         { x: 0, y: 0.92 },
         { x: -0.7, y: 0.55 },
       ];
-      const pts = pointsOnPolyline(
-        [...shield, shield[0]],
-        Math.floor(n * 0.6),
-        0.03,
-      );
+      const shieldClosed = [...shield, shield[0]];
+      const outlineCount = Math.floor(n * 0.6);
+      const pts = pointsOnPolyline(shieldClosed, outlineCount, 0.03);
       const hashLines: Pt[][] = [
         [
           { x: -0.22, y: -0.3 },
@@ -477,22 +446,20 @@ export default function FunnelCanvas() {
           { x: 0.18, y: 0.18 },
         ],
       ];
-      const rem = n - pts.length,
-        perLine = Math.floor(rem / hashLines.length);
-      hashLines.forEach((line, i) =>
-        pts.push(
-          ...pointsOnPolyline(
-            line,
-            i === hashLines.length - 1
-              ? rem - perLine * (hashLines.length - 1)
-              : perLine,
-            0.02,
-          ),
-        ),
-      );
+      const remaining = n - pts.length;
+      const perLine = Math.floor(remaining / hashLines.length);
+      hashLines.forEach((line, i) => {
+        const count =
+          i === hashLines.length - 1
+            ? remaining - perLine * (hashLines.length - 1)
+            : perLine;
+        pts.push(...pointsOnPolyline(line, count, 0.02));
+      });
       return pts;
     }
+
     function supabasePoints(n: number): Pt[] {
+      // Supabase's lightning-bolt mark — a sharp angular Z-bolt shape.
       const bolt: Pt[] = [
         { x: 0.25, y: -0.95 },
         { x: -0.55, y: 0.15 },
@@ -501,57 +468,48 @@ export default function FunnelCanvas() {
         { x: 0.55, y: -0.15 },
         { x: 0.05, y: -0.15 },
       ];
-      const pts = pointsOnPolyline(
-        [...bolt, bolt[0]],
-        Math.floor(n * 0.55),
-        0.03,
-      );
+      const boltClosed = [...bolt, bolt[0]];
+      const outline = Math.floor(n * 0.55);
+      const pts = pointsOnPolyline(boltClosed, outline, 0.03);
       pts.push(...filledBlob(0, 0, 0.45, 0.6, n - pts.length));
       return pts;
     }
+
     function githubPoints(n: number): Pt[] {
-      const pts = [
-        ...pointsOnBezier(
-          { x: -0.75, y: 0.1 },
-          { x: -0.85, y: -0.7 },
-          { x: 0.85, y: -0.7 },
-          { x: 0.75, y: 0.1 },
-          Math.floor(n * 0.3),
-          0.035,
-        ),
-        ...pointsOnBezier(
-          { x: 0.75, y: 0.1 },
-          { x: 0.6, y: 0.85 },
-          { x: -0.6, y: 0.85 },
-          { x: -0.75, y: 0.1 },
-          Math.floor(n * 0.25),
-          0.035,
-        ),
-      ];
-      const earCount = Math.floor((n - pts.length) * 0.4);
-      pts.push(
-        ...pointsOnPolyline(
-          [
-            { x: -0.6, y: -0.55 },
-            { x: -0.95, y: -0.95 },
-            { x: -0.4, y: -0.75 },
-            { x: -0.6, y: -0.55 },
-          ],
-          earCount,
-          0.025,
-        ),
+      // Octocat head silhouette — rounded skull with two pointed ears,
+      // traced via bezier arcs for the rounded forms.
+      const head = pointsOnBezier(
+        { x: -0.75, y: 0.1 },
+        { x: -0.85, y: -0.7 },
+        { x: 0.85, y: -0.7 },
+        { x: 0.75, y: 0.1 },
+        Math.floor(n * 0.3),
+        0.035,
       );
+      const headLower = pointsOnBezier(
+        { x: 0.75, y: 0.1 },
+        { x: 0.6, y: 0.85 },
+        { x: -0.6, y: 0.85 },
+        { x: -0.75, y: 0.1 },
+        Math.floor(n * 0.25),
+        0.035,
+      );
+      const earLeft: Pt[] = [
+        { x: -0.6, y: -0.55 },
+        { x: -0.95, y: -0.95 },
+        { x: -0.4, y: -0.75 },
+      ];
+      const earRight: Pt[] = [
+        { x: 0.6, y: -0.55 },
+        { x: 0.95, y: -0.95 },
+        { x: 0.4, y: -0.75 },
+      ];
+      const remaining1 = n - head.length - headLower.length;
+      const earCount = Math.floor(remaining1 * 0.4);
+      const pts = [...head, ...headLower];
+      pts.push(...pointsOnPolyline([...earLeft, earLeft[0]], earCount, 0.025));
       pts.push(
-        ...pointsOnPolyline(
-          [
-            { x: 0.6, y: -0.55 },
-            { x: 0.95, y: -0.95 },
-            { x: 0.4, y: -0.75 },
-            { x: 0.6, y: -0.55 },
-          ],
-          earCount,
-          0.025,
-        ),
+        ...pointsOnPolyline([...earRight, earRight[0]], earCount, 0.025),
       );
       const eyeCount = n - pts.length;
       pts.push(
@@ -585,18 +543,19 @@ export default function FunnelCanvas() {
       { fn: githubPoints, label: "github" },
     ];
     let shapeIdx = 0;
+
     let particles: Particle[] = [];
 
     function localToWorld(pts: Pt[]) {
-      const cx = W / 2,
-        cy = H / 2,
-        scale = Math.min(W, H) * 0.28;
+      const cx = W / 2;
+      const cy = H / 2;
+      const scale = Math.min(W, H) * 0.28;
       return pts.map((p) => ({ x: cx + p.x * scale, y: cy + p.y * scale }));
     }
 
     function buildParticles() {
       const targets = localToWorld(SHAPES[shapeIdx].fn(COUNT));
-      particles = targets.map((tpt, i) => ({
+      particles = targets.map((tpt) => ({
         x: W / 2 + (Math.random() - 0.5) * 60 * dpr,
         y: H / 2 + (Math.random() - 0.5) * 60 * dpr,
         tx: tpt.x,
@@ -605,7 +564,6 @@ export default function FunnelCanvas() {
         vy: 0,
         size: 0.7 + Math.random() * 1.2,
         shade: 0.3 + Math.random() * 0.55,
-        isRed: i % 7 === 0,
       }));
     }
 
@@ -623,17 +581,18 @@ export default function FunnelCanvas() {
         p.ty = targets[i].y;
       });
     }
+
     function randomizeScatter() {
       particles.forEach((p) => {
-        const a = Math.random() * Math.PI * 2,
-          r = Math.random() * Math.min(W, H) * 0.42;
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * Math.min(W, H) * 0.42;
         p.tx = W / 2 + Math.cos(a) * r;
         p.ty = H / 2 + Math.sin(a) * r;
       });
     }
 
-    let t = 0,
-      frameId: number;
+    let t = 0;
+    let frameId: number;
 
     function draw() {
       ctx!.clearRect(0, 0, W, H);
@@ -660,82 +619,53 @@ export default function FunnelCanvas() {
 
       const ease = phase === "hold" ? 0.075 : 0.05;
 
-      // --- BATCHED PARTICLE DRAW: separate white vs red, draw each in one path ---
-      ctx!.beginPath();
-      const whitePath: Particle[] = [];
-      const redPath: Particle[] = [];
-
       particles.forEach((p) => {
-        let tx = p.tx,
-          ty = p.ty;
+        let tx = p.tx;
+        let ty = p.ty;
+
         if (phase === "scatter") {
           tx += Math.sin(t * 0.5 + p.x * 0.01) * 24 * dpr;
           ty += Math.cos(t * 0.4 + p.y * 0.01) * 24 * dpr;
         }
-        p.vx += (tx - p.x) * ease * 0.045;
-        p.vy += (ty - p.y) * ease * 0.045;
+
+        const dx = tx - p.x;
+        const dy = ty - p.y;
+        p.vx += dx * ease * 0.045;
+        p.vy += dy * ease * 0.045;
+
         if (pointer.active) {
-          const pdx = p.x - pointer.x,
-            pdy = p.y - pointer.y,
-            pd = Math.hypot(pdx, pdy);
+          const pdx = p.x - pointer.x;
+          const pdy = p.y - pointer.y;
+          const pd = Math.hypot(pdx, pdy);
           const radius = (phase === "hold" ? 85 : 100) * dpr;
           if (pd < radius && pd > 1) {
-            const force = (1 - pd / radius) * (phase === "hold" ? 0.6 : 0.85);
+            const strength = phase === "hold" ? 0.6 : 0.85;
+            const force = (1 - pd / radius) * strength;
             p.vx += (pdx / pd) * force;
             p.vy += (pdy / pd) * force;
           }
         }
+
         p.vx *= 0.87;
         p.vy *= 0.87;
         p.x += p.vx;
         p.y += p.vy;
-        if (p.isRed) redPath.push(p);
-        else whitePath.push(p);
+
+        const holdPulse =
+          phase === "hold" ? 0.1 + 0.08 * Math.sin(t * 2 + p.x * 0.05) : 0;
+        const alpha = p.shade + holdPulse;
+
+        ctx!.beginPath();
+        ctx!.fillStyle = `rgba(240,240,240,${Math.min(alpha, 1)})`;
+        ctx!.arc(p.x, p.y, p.size * dpr, 0, Math.PI * 2);
+        ctx!.fill();
       });
 
-      // Draw white particles in one path
-      const holdPulseBase = phase === "hold" ? 0.1 : 0;
-      ctx!.beginPath();
-      for (const p of whitePath) {
-        const holdPulse =
-          holdPulseBase +
-          (phase === "hold" ? 0.08 * Math.sin(t * 2 + p.x * 0.05) : 0);
-        const alpha = Math.min(p.shade + holdPulse, 1);
-        ctx!.globalAlpha = alpha;
-        ctx!.moveTo(p.x + p.size * dpr, p.y);
-        ctx!.arc(p.x, p.y, p.size * dpr, 0, Math.PI * 2);
-      }
-      ctx!.fillStyle = "rgba(240,240,240,1)";
-      ctx!.globalAlpha = 1;
-      // Can't batch varying-alpha particles in one path easily — use two alpha groups
-      // Draw white particles split into bright/dim
-      ctx!.globalAlpha = 1;
-      for (const p of whitePath) {
-        const holdPulse =
-          phase === "hold" ? 0.1 + 0.08 * Math.sin(t * 2 + p.x * 0.05) : 0;
-        const alpha = Math.min(p.shade + holdPulse, 1);
-        ctx!.globalAlpha = alpha;
-        ctx!.beginPath();
-        ctx!.arc(p.x, p.y, p.size * dpr, 0, Math.PI * 2);
-        ctx!.fillStyle = "rgba(240,240,240,1)";
-        ctx!.fill();
-      }
-      for (const p of redPath) {
-        const holdPulse =
-          phase === "hold" ? 0.1 + 0.08 * Math.sin(t * 2 + p.x * 0.05) : 0;
-        const alpha = Math.min((p.shade + holdPulse) * 1.2, 1);
-        ctx!.globalAlpha = alpha;
-        ctx!.beginPath();
-        ctx!.arc(p.x, p.y, p.size * dpr, 0, Math.PI * 2);
-        ctx!.fillStyle = "rgba(255,180,160,1)";
-        ctx!.fill();
-      }
-      ctx!.globalAlpha = 1;
-
-      // Label
+      // Faint label beneath the shape, fading in during hold and out
+      // before disperse begins.
       if (phase === "hold") {
-        const fadeIn = Math.min(1, phaseT / 40),
-          fadeOut = Math.min(1, (CYCLE.hold - phaseT) / 40);
+        const fadeIn = Math.min(1, phaseT / 40);
+        const fadeOut = Math.min(1, (CYCLE.hold - phaseT) / 40);
         const labelAlpha = Math.min(fadeIn, fadeOut) * 0.4;
         if (labelAlpha > 0.01) {
           ctx!.font = `${Math.round(13 * dpr)}px 'Space Mono', monospace`;

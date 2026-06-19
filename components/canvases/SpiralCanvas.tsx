@@ -2,309 +2,251 @@
 
 import { useEffect, useRef } from "react";
 
-type Drop = {
-  x: number;
-  y: number;
-  vy: number;
+type Particle = {
+  angle: number;
+  radius: number;
   size: number;
-  trail: { x: number; y: number }[];
-  landed: boolean;
-  generation: number;
+  brightness: number;
+  isStar: boolean;
+  twinklePhase: number;
+  twinkleSpeed: number;
+  lensX: number;
+  lensY: number;
+  lensSwirl: number;
 };
 
-type Ripple = {
-  x: number;
-  y: number;
-  r: number;
-  maxR: number;
-  age: number;
-  maxAge: number;
-  generation: number;
-  children: number;
-  maxChildren: number;
-};
-
-type Splash = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  size: number;
-};
-
-export default function InkRipple() {
+export default function SpiralCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d", { alpha: true });
+    const c = canvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
     if (!ctx) return;
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    let W = 0,
-      H = 0,
-      t = 0;
-    let frameId: number;
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    let W: number, H: number;
 
-    const drops: Drop[] = [];
-    const ripples: Ripple[] = [];
-    const splashes: Splash[] = [];
+    const pointer = { x: -9999, y: -9999, active: 0, strength: 0 };
+    function onMove(e: MouseEvent) {
+      const rect = c!.getBoundingClientRect();
+      pointer.x = (e.clientX - rect.left) * dpr;
+      pointer.y = (e.clientY - rect.top) * dpr;
+      pointer.active = 1;
+    }
+    function onLeave() {
+      pointer.active = 0;
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseleave", onLeave);
+
+    let cx = 0,
+      cy = 0;
+    let particles: Particle[] = [];
+
+    // Pre-rendered star glow sprite — drawn once, reused via drawImage
+    // every frame instead of creating a radial gradient per star.
+    let glowSprite: HTMLCanvasElement | null = null;
+    function buildGlowSprite() {
+      const size = 28;
+      glowSprite = document.createElement("canvas");
+      glowSprite.width = size;
+      glowSprite.height = size;
+      const gctx = glowSprite.getContext("2d")!;
+      const grad = gctx.createRadialGradient(
+        size / 2,
+        size / 2,
+        0,
+        size / 2,
+        size / 2,
+        size / 2,
+      );
+      grad.addColorStop(0, "rgba(255,255,255,0.9)");
+      grad.addColorStop(1, "rgba(255,255,255,0)");
+      gctx.fillStyle = grad;
+      gctx.fillRect(0, 0, size, size);
+    }
+
+    function buildParticles() {
+      cx = W / 2;
+      cy = H / 2;
+      const maxR = Math.max(W, H) * 0.6;
+      const COUNT = 800; // cut from 2200 — biggest perf win
+      const STAR_RATIO = 0.05;
+
+      particles = Array.from({ length: COUNT }, () => {
+        const radius = Math.pow(Math.random(), 1.8) * maxR;
+        const armOffset = (radius / maxR) * 3.2;
+        const arm = Math.floor(Math.random() * 3) * ((Math.PI * 2) / 3);
+        const angle = arm + armOffset + (Math.random() - 0.5) * 0.9;
+        const isStar = Math.random() < STAR_RATIO;
+
+        return {
+          angle,
+          radius,
+          size: isStar ? 0.9 + Math.random() * 1.3 : 0.5 + Math.random() * 0.8,
+          brightness: isStar
+            ? 0.6 + Math.random() * 0.4
+            : 0.1 + Math.random() * 0.2,
+          isStar,
+          twinklePhase: Math.random() * Math.PI * 2,
+          twinkleSpeed: 0.02 + Math.random() * 0.02,
+          lensX: 0,
+          lensY: 0,
+          lensSwirl: 0,
+        };
+      });
+    }
 
     function resize() {
-      W = canvas.width = canvas.offsetWidth * dpr;
-      H = canvas.height = canvas.offsetHeight * dpr;
+      W = c!.width = c!.offsetWidth * dpr;
+      H = c!.height = c!.offsetHeight * dpr;
+      buildParticles();
+      buildGlowSprite();
     }
     resize();
     window.addEventListener("resize", resize);
 
-    const WW = () => W / dpr;
-    const HH = () => H / dpr;
-    const surfaceY = () => HH() * 0.58;
+    let t = 0;
+    let galaxyRotation = 0;
+    let frameId: number;
 
-    function easeOut(t: number) {
-      return 1 - Math.pow(1 - t, 3);
-    }
+    function draw() {
+      ctx!.clearRect(0, 0, W, H);
+      t += 1;
 
-    function spawnDrop(x: number, startY: number, size: number, gen: number) {
-      if (gen > 3) return;
-      drops.push({
-        x,
-        y: startY,
-        vy: 1.5 + Math.random() * 2,
-        size,
-        trail: [],
-        landed: false,
-        generation: gen,
-      });
-    }
+      // genuine whole-galaxy spin — visible, continuous
+      galaxyRotation += 0.0011;
 
-    function spawnSplash(
-      x: number,
-      y: number,
-      count: number,
-      intensity: number,
-    ) {
-      for (let i = 0; i < count; i++) {
-        const angle = -Math.PI + Math.random() * Math.PI * 2;
-        const speed = (1 + Math.random() * 3) * intensity;
-        splashes.push({
-          x,
-          y,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed - 3,
-          life: 1,
-          size: 1 + Math.random() * 2,
-        });
-      }
-    }
+      pointer.strength += ((pointer.active ? 1 : 0) - pointer.strength) * 0.06;
+      const lensRadius = 170 * dpr;
+      const lensActive = pointer.strength > 0.01;
+      const lensRadiusSq = lensRadius * lensRadius;
 
-    spawnDrop(WW() / 2, HH() * 0.05, 5, 0);
-    let lastAutoSpawn = 0;
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
 
-    function simulate() {
-      t++;
+        const totalAngle = p.angle + galaxyRotation;
+        const cosA = Math.cos(totalAngle);
+        const sinA = Math.sin(totalAngle);
+        const baseX = cx + cosA * p.radius;
+        const baseY = cy + sinA * p.radius * 0.6;
 
-      const allDone =
-        drops.length === 0 && ripples.every((r) => r.age > r.maxAge * 0.8);
-      if (allDone && t - lastAutoSpawn > 130) {
-        lastAutoSpawn = t;
-        spawnDrop(
-          WW() * (0.25 + Math.random() * 0.5),
-          HH() * 0.02,
-          4 + Math.random() * 3,
-          0,
-        );
-      }
+        let fx = baseX;
+        let fy = baseY;
 
-      for (let i = drops.length - 1; i >= 0; i--) {
-        const d = drops[i];
-        if (d.landed) {
-          drops.splice(i, 1);
-          continue;
-        }
-        d.vy += 0.18;
-        d.y += d.vy;
-        d.trail.unshift({ x: d.x, y: d.y });
-        if (d.trail.length > 18) d.trail.pop();
+        // only do the (expensive-ish) lens math for particles that could
+        // plausibly be within range — cheap squared-distance pre-check
+        if (lensActive) {
+          const dx0 = baseX - pointer.x;
+          const dy0 = baseY - pointer.y;
+          const distSq = dx0 * dx0 + dy0 * dy0;
 
-        if (d.y >= surfaceY()) {
-          d.landed = true;
-          spawnSplash(d.x, surfaceY(), 8 + d.generation * 2, d.size * 0.4);
-          const maxR = 60 + d.size * 10 - d.generation * 8;
-          ripples.push({
-            x: d.x,
-            y: surfaceY(),
-            r: 0,
-            maxR,
-            age: 0,
-            maxAge: 120 + maxR * 0.8,
-            generation: d.generation,
-            children: 0,
-            maxChildren: Math.max(0, 3 - d.generation),
-          });
-        }
-      }
+          if (distSq < lensRadiusSq) {
+            const dist = Math.sqrt(distSq) || 0.001;
+            const falloff = 1 - dist / lensRadius;
+            const pull = falloff * falloff * 34 * dpr * pointer.strength;
+            const targetLensX = -(dx0 / dist) * pull;
+            const targetLensY = -(dy0 / dist) * pull;
+            const targetSwirl = falloff * falloff * 1.1 * pointer.strength;
 
-      for (let i = ripples.length - 1; i >= 0; i--) {
-        const rip = ripples[i];
-        rip.age++;
-        rip.r = rip.maxR * easeOut(Math.min(1, rip.age / (rip.maxAge * 0.6)));
-
-        if (rip.children < rip.maxChildren) {
-          const threshold = (rip.children + 1) / (rip.maxChildren + 1);
-          if (rip.age / rip.maxAge > threshold * 0.4) {
-            rip.children++;
-            const angle = Math.random() * Math.PI * 2;
-            spawnDrop(
-              rip.x + Math.cos(angle) * rip.r * 0.7,
-              surfaceY() - 8,
-              3 - rip.generation * 0.6,
-              rip.generation + 1,
-            );
+            p.lensX += (targetLensX - p.lensX) * 0.08;
+            p.lensY += (targetLensY - p.lensY) * 0.08;
+            p.lensSwirl += (targetSwirl - p.lensSwirl) * 0.08;
+          } else if (p.lensSwirl !== 0 || p.lensX !== 0) {
+            p.lensX *= 0.92;
+            p.lensY *= 0.92;
+            p.lensSwirl *= 0.92;
           }
+
+          if (p.lensX !== 0 || p.lensY !== 0) {
+            fx += p.lensX;
+            fy += p.lensY;
+          }
+          if (p.lensSwirl > 0.001) {
+            const ddx = fx - pointer.x;
+            const ddy = fy - pointer.y;
+            const a = p.lensSwirl * 0.5;
+            const c2 = Math.cos(a),
+              s2 = Math.sin(a);
+            fx = pointer.x + ddx * c2 - ddy * s2;
+            fy = pointer.y + ddx * s2 + ddy * c2;
+          }
+        } else if (p.lensX !== 0 || p.lensY !== 0 || p.lensSwirl !== 0) {
+          p.lensX *= 0.92;
+          p.lensY *= 0.92;
+          p.lensSwirl *= 0.92;
+          fx += p.lensX;
+          fy += p.lensY;
         }
 
-        if (rip.age > rip.maxAge) ripples.splice(i, 1);
+        const twinkle = p.isStar
+          ? 0.6 + 0.4 * Math.sin(t * p.twinkleSpeed + p.twinklePhase)
+          : 1;
+        const alpha = p.brightness * twinkle;
+        const size = p.size * dpr * (p.isStar ? twinkle * 0.6 + 0.7 : 1);
+
+        if (p.isStar && glowSprite) {
+          const gs = size * 7;
+          ctx!.globalAlpha = alpha * 0.5;
+          ctx!.drawImage(glowSprite, fx - gs / 2, fy - gs / 2, gs, gs);
+          ctx!.globalAlpha = 1;
+        }
+
+        ctx!.beginPath();
+        ctx!.fillStyle = `rgba(240,240,240,${Math.min(1, alpha)})`;
+        ctx!.arc(fx, fy, Math.max(0.4, size), 0, Math.PI * 2);
+        ctx!.fill();
       }
 
-      for (let i = splashes.length - 1; i >= 0; i--) {
-        const s = splashes[i];
-        s.x += s.vx;
-        s.y += s.vy;
-        s.vy += 0.22;
-        s.vx *= 0.94;
-        s.life -= 0.03;
-        if (s.life < 0) splashes.splice(i, 1);
-      }
-    }
+      // soft core glow — single gradient per frame, not per particle
+      const coreGlow = ctx!.createRadialGradient(
+        cx,
+        cy,
+        0,
+        cx,
+        cy,
+        Math.min(W, H) * 0.12,
+      );
+      coreGlow.addColorStop(0, "rgba(240,240,240,0.05)");
+      coreGlow.addColorStop(1, "rgba(240,240,240,0)");
+      ctx!.beginPath();
+      ctx!.fillStyle = coreGlow;
+      ctx!.arc(cx, cy, Math.min(W, H) * 0.12, 0, Math.PI * 2);
+      ctx!.fill();
 
-    function render() {
-      ctx.clearRect(0, 0, W, H);
-      ctx.save();
-      ctx.scale(dpr, dpr);
+      if (pointer.strength > 0.02) {
+        ctx!.beginPath();
+        ctx!.arc(pointer.x, pointer.y, lensRadius * 0.5, 0, Math.PI * 2);
+        ctx!.strokeStyle = `rgba(240,240,240,${0.05 * pointer.strength})`;
+        ctx!.lineWidth = 0.6 * dpr;
+        ctx!.stroke();
 
-      const sy = surfaceY();
-
-      // Surface line
-      ctx.beginPath();
-      ctx.moveTo(0, sy);
-      ctx.lineTo(WW(), sy);
-      ctx.strokeStyle = "rgba(255,255,255,0.1)";
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
-
-      // Water body
-      const wg = ctx.createLinearGradient(0, sy, 0, HH());
-      wg.addColorStop(0, "rgba(255,255,255,0.05)");
-      wg.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = wg;
-      ctx.fillRect(0, sy, WW(), HH() - sy);
-
-      // Ripples — perspective ellipses
-      for (const rip of ripples) {
-        const progress = rip.age / rip.maxAge;
-        const alpha = (1 - progress) * (0.7 - rip.generation * 0.15);
-        if (alpha <= 0) continue;
-        for (let k = 0; k < 3; k++) {
-          const rr = rip.r * (1 - k * 0.18);
-          if (rr <= 0) continue;
-          ctx.beginPath();
-          ctx.ellipse(rip.x, rip.y, rr, rr * 0.3, 0, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(255,255,255,${alpha * (1 - k * 0.3)})`;
-          ctx.lineWidth = 1.2 - k * 0.3;
-          ctx.stroke();
+        if (glowSprite) {
+          const gs = 24 * dpr;
+          ctx!.globalAlpha = 0.25 * pointer.strength;
+          ctx!.drawImage(
+            glowSprite,
+            pointer.x - gs / 2,
+            pointer.y - gs / 2,
+            gs,
+            gs,
+          );
+          ctx!.globalAlpha = 1;
         }
       }
 
-      // Splashes
-      for (const s of splashes) {
-        if (s.y > sy + 4) continue;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.size * s.life, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,255,255,${s.life * 0.7})`;
-        ctx.fill();
-      }
-
-      // Trails
-      for (const d of drops) {
-        for (let k = 1; k < d.trail.length; k++) {
-          ctx.beginPath();
-          ctx.moveTo(d.trail[k - 1].x, d.trail[k - 1].y);
-          ctx.lineTo(d.trail[k].x, d.trail[k].y);
-          ctx.strokeStyle = `rgba(255,255,255,${(1 - k / d.trail.length) * 0.35})`;
-          ctx.lineWidth = d.size * 0.35 * (1 - k / d.trail.length);
-          ctx.stroke();
-        }
-      }
-
-      // Drops — teardrop shape
-      for (const d of drops) {
-        const stretch = Math.min(d.vy * 0.5, 3);
-        ctx.save();
-        ctx.translate(d.x, d.y);
-        ctx.beginPath();
-        ctx.ellipse(
-          0,
-          stretch * 0.5,
-          d.size * 0.6,
-          d.size + stretch,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fillStyle = `rgba(255,255,255,${0.85 - d.generation * 0.15})`;
-        ctx.fill();
-        // Highlight
-        ctx.beginPath();
-        ctx.ellipse(
-          -d.size * 0.15,
-          -d.size * 0.2,
-          d.size * 0.18,
-          d.size * 0.28,
-          -0.4,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fillStyle = "rgba(255,255,255,0.4)";
-        ctx.fill();
-        ctx.restore();
-      }
-
-      ctx.restore();
+      frameId = requestAnimationFrame(draw);
     }
-
-    function animate() {
-      simulate();
-      render();
-      frameId = requestAnimationFrame(animate);
-    }
-
-    animate();
-
-    const onClick = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      spawnDrop(e.clientX - rect.left, 0, 5 + Math.random() * 3, 0);
-    };
-    canvas.addEventListener("click", onClick);
+    draw();
 
     return () => {
       window.removeEventListener("resize", resize);
-      canvas.removeEventListener("click", onClick);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseleave", onLeave);
       cancelAnimationFrame(frameId);
     };
   }, []);
 
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        display: "block",
-        width: "100%",
-        height: "100%",
-        cursor: "crosshair",
-      }}
-    />
-  );
+  return <canvas id="spiral-canvas" ref={canvasRef}></canvas>;
 }

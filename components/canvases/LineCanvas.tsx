@@ -29,13 +29,55 @@ export default function LineCanvas() {
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseleave", onLeave);
 
-    // Each "construction" is a sequence of steps.
-    // Each step moves the nib along a path and deposits a line.
+    // Cached offscreen sprites — rebuilt on resize
+    let vignetteCanvas: HTMLCanvasElement | null = null;
+    let nibGlowSprite: HTMLCanvasElement | null = null;
+
+    function buildVignette() {
+      vignetteCanvas = document.createElement("canvas");
+      vignetteCanvas.width = W;
+      vignetteCanvas.height = H;
+      const vc = vignetteCanvas.getContext("2d")!;
+      const g = vc.createRadialGradient(
+        W / 2,
+        H / 2,
+        Math.min(W, H) * 0.18,
+        W / 2,
+        H / 2,
+        Math.max(W, H) * 0.82,
+      );
+      g.addColorStop(0, "rgba(0,0,0,0)");
+      g.addColorStop(1, "rgba(0,0,0,0.6)");
+      vc.fillStyle = g;
+      vc.fillRect(0, 0, W, H);
+    }
+
+    function buildNibGlow() {
+      const r = 22 * dpr;
+      const size = Math.ceil(r * 2 + 4);
+      nibGlowSprite = document.createElement("canvas");
+      nibGlowSprite.width = size;
+      nibGlowSprite.height = size;
+      const nc = nibGlowSprite.getContext("2d")!;
+      const g = nc.createRadialGradient(
+        size / 2,
+        size / 2,
+        0,
+        size / 2,
+        size / 2,
+        r,
+      );
+      g.addColorStop(0, "rgba(240,240,240,0.22)");
+      g.addColorStop(1, "rgba(240,240,240,0)");
+      nc.fillStyle = g;
+      nc.arc(size / 2, size / 2, r, 0, Math.PI * 2);
+      nc.fill();
+    }
 
     type Step = {
       pts: { x: number; y: number }[];
-      drawn: number; // 0..1 how far drawn
-      alpha: number; // current opacity
+      drawn: number;
+      alpha: number;
       done: boolean;
     };
 
@@ -76,7 +118,6 @@ export default function LineCanvas() {
       const steps: Step[] = [];
       const half = size / 2;
       const step = size / div;
-      // horizontal lines
       for (let i = 0; i <= div; i++) {
         const y = cy - half + i * step;
         steps.push({
@@ -89,7 +130,6 @@ export default function LineCanvas() {
           done: false,
         });
       }
-      // vertical lines
       for (let i = 0; i <= div; i++) {
         const x = cx - half + i * step;
         steps.push({
@@ -116,7 +156,6 @@ export default function LineCanvas() {
         }
         steps.push({ pts, drawn: 0, alpha: 1, done: false });
       });
-      // cross hairs
       const reach = 190 * dpr;
       steps.push({
         pts: [
@@ -141,8 +180,8 @@ export default function LineCanvas() {
 
     function makeSpiralSteps(cx: number, cy: number): Step[] {
       const pts: { x: number; y: number }[] = [];
-      const turns = 4;
-      const segs = 200;
+      const turns = 4,
+        segs = 200;
       for (let i = 0; i <= segs; i++) {
         const u = i / segs;
         const a = u * Math.PI * 2 * turns - Math.PI / 2;
@@ -154,17 +193,19 @@ export default function LineCanvas() {
 
     function makeTriangleWebSteps(cx: number, cy: number): Step[] {
       const steps: Step[] = [];
-      const n = 6;
-      const R = 160 * dpr;
+      const n = 6,
+        R = 160 * dpr;
       const verts: { x: number; y: number }[] = [];
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2 - Math.PI / 2;
         verts.push({ x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R });
       }
-      // outer polygon
-      const poly = [...verts, verts[0]];
-      steps.push({ pts: poly, drawn: 0, alpha: 1, done: false });
-      // inner connections
+      steps.push({
+        pts: [...verts, verts[0]],
+        drawn: 0,
+        alpha: 1,
+        done: false,
+      });
       for (let i = 0; i < n; i++) {
         for (let j = i + 2; j < n; j++) {
           steps.push({
@@ -175,7 +216,6 @@ export default function LineCanvas() {
           });
         }
       }
-      // center to each vertex
       verts.forEach((v) => {
         steps.push({
           pts: [{ x: cx, y: cy }, v],
@@ -216,35 +256,31 @@ export default function LineCanvas() {
     function resize() {
       W = c!.width = c!.offsetWidth * dpr;
       H = c!.height = c!.offsetHeight * dpr;
+      buildVignette();
+      buildNibGlow();
       construction = null;
       spawnConstruction();
     }
 
-    const NIB_SPEED = 3.8; // pts per frame along path
+    const NIB_SPEED = 3.8;
 
     function updateConstruction() {
       if (!construction) return;
       const con = construction;
-
       if (con.phase === "drawing") {
         const step = con.steps[con.currentStep];
         if (!step) {
           con.phase = "holding";
           return;
         }
-
-        // advance nib along current step
         const totalLen = step.pts.length - 1;
         step.drawn = Math.min(1, step.drawn + NIB_SPEED / (totalLen * 8));
-
-        // nib target = current tip of drawing
         const tipIdx = Math.min(
           step.pts.length - 1,
           Math.floor(step.drawn * (step.pts.length - 1)),
         );
         nibTargetX = step.pts[tipIdx].x;
         nibTargetY = step.pts[tipIdx].y;
-
         if (step.drawn >= 1) {
           step.done = true;
           con.currentStep++;
@@ -268,11 +304,10 @@ export default function LineCanvas() {
 
     function drawConstruction() {
       if (!construction) return;
-      construction.steps.forEach((step, si) => {
+      construction.steps.forEach((step) => {
         if (step.drawn <= 0 || step.alpha <= 0) return;
         const visibleEnd = Math.floor(step.drawn * (step.pts.length - 1));
         if (visibleEnd < 1) return;
-
         ctx!.beginPath();
         ctx!.moveTo(step.pts[0].x, step.pts[0].y);
         for (let i = 1; i <= visibleEnd; i++) {
@@ -289,7 +324,6 @@ export default function LineCanvas() {
     function drawNib() {
       if (!construction || construction.phase === "fading") return;
 
-      // cursor pulls nib slightly
       let nx = nibX,
         ny = nibY;
       if (ptr.active) {
@@ -304,52 +338,42 @@ export default function LineCanvas() {
         }
       }
 
-      // outer ring
+      // Use cached glow sprite instead of creating gradient per frame
+      if (nibGlowSprite) {
+        const r = 22 * dpr;
+        ctx!.drawImage(nibGlowSprite, nx - r - 2, ny - r - 2);
+      }
+
       ctx!.beginPath();
       ctx!.arc(nx, ny, 6 * dpr, 0, Math.PI * 2);
       ctx!.strokeStyle = "rgba(240,240,240,0.18)";
       ctx!.lineWidth = 0.6 * dpr;
       ctx!.stroke();
 
-      // inner dot
       ctx!.beginPath();
       ctx!.arc(nx, ny, 2 * dpr, 0, Math.PI * 2);
       ctx!.fillStyle = "rgba(240,240,240,0.9)";
       ctx!.fill();
-
-      // glow
-      const g = ctx!.createRadialGradient(nx, ny, 0, nx, ny, 22 * dpr);
-      g.addColorStop(0, "rgba(240,240,240,0.22)");
-      g.addColorStop(1, "rgba(240,240,240,0)");
-      ctx!.beginPath();
-      ctx!.fillStyle = g;
-      ctx!.arc(nx, ny, 22 * dpr, 0, Math.PI * 2);
-      ctx!.fill();
     }
 
     function drawVignette() {
-      const g = ctx!.createRadialGradient(
-        W / 2,
-        H / 2,
-        Math.min(W, H) * 0.18,
-        W / 2,
-        H / 2,
-        Math.max(W, H) * 0.82,
-      );
-      g.addColorStop(0, "rgba(0,0,0,0)");
-      g.addColorStop(1, "rgba(0,0,0,0.6)");
-      ctx!.fillStyle = g;
-      ctx!.fillRect(0, 0, W, H);
+      if (vignetteCanvas) ctx!.drawImage(vignetteCanvas, 0, 0);
     }
 
-    function draw() {
+    let lastTime = 0;
+    const FRAME_MS = 1000 / 60;
+
+    function draw(now: number) {
+      frameId = requestAnimationFrame(draw);
+      const delta = now - lastTime;
+      if (delta < FRAME_MS - 1) return;
+      lastTime = now - (delta % FRAME_MS);
+
       ctx!.clearRect(0, 0, W, H);
       t += 0.01;
 
       ptr.sx += (ptr.x - ptr.sx) * 0.07;
       ptr.sy += (ptr.y - ptr.sy) * 0.07;
-
-      // nib smoothly follows target
       nibX += (nibTargetX - nibX) * 0.14;
       nibY += (nibTargetY - nibY) * 0.14;
 
@@ -357,13 +381,11 @@ export default function LineCanvas() {
       drawConstruction();
       drawNib();
       drawVignette();
-
-      frameId = requestAnimationFrame(draw);
     }
 
     resize();
     window.addEventListener("resize", resize);
-    draw();
+    frameId = requestAnimationFrame(draw);
 
     return () => {
       window.removeEventListener("resize", resize);
@@ -373,5 +395,5 @@ export default function LineCanvas() {
     };
   }, []);
 
-  return <canvas id="spiral-canvas" ref={canvasRef} />;
+  return <canvas id="line-canvas" ref={canvasRef} />;
 }

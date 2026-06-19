@@ -25,6 +25,7 @@ export default function SpiralCanvas() {
     if (!ctx) return;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const isMobile = window.innerWidth < 860;
     let W: number, H: number;
 
     const pointer = { x: -9999, y: -9999, active: 0, strength: 0 };
@@ -44,8 +45,7 @@ export default function SpiralCanvas() {
       cy = 0;
     let particles: Particle[] = [];
 
-    // Pre-rendered star glow sprite — drawn once, reused via drawImage
-    // every frame instead of creating a radial gradient per star.
+    // Pre-rendered star glow sprite
     let glowSprite: HTMLCanvasElement | null = null;
     function buildGlowSprite() {
       const size = 28;
@@ -67,11 +67,57 @@ export default function SpiralCanvas() {
       gctx.fillRect(0, 0, size, size);
     }
 
+    // Cached core glow — rebuilt on resize, not per frame
+    let coreGlowCanvas: HTMLCanvasElement | null = null;
+    function buildCoreGlow() {
+      const r = Math.min(W, H) * 0.12;
+      const size = Math.ceil(r * 2 + 4);
+      coreGlowCanvas = document.createElement("canvas");
+      coreGlowCanvas.width = size;
+      coreGlowCanvas.height = size;
+      const gc = coreGlowCanvas.getContext("2d")!;
+      const grad = gc.createRadialGradient(
+        size / 2,
+        size / 2,
+        0,
+        size / 2,
+        size / 2,
+        r,
+      );
+      grad.addColorStop(0, "rgba(240,240,240,0.05)");
+      grad.addColorStop(1, "rgba(240,240,240,0)");
+      gc.fillStyle = grad;
+      gc.arc(size / 2, size / 2, r, 0, Math.PI * 2);
+      gc.fill();
+    }
+
+    // Cached pointer glow sprite
+    let pointerGlow: HTMLCanvasElement | null = null;
+    function buildPointerGlow() {
+      const size = 48;
+      pointerGlow = document.createElement("canvas");
+      pointerGlow.width = size;
+      pointerGlow.height = size;
+      const gc = pointerGlow.getContext("2d")!;
+      const grad = gc.createRadialGradient(
+        size / 2,
+        size / 2,
+        0,
+        size / 2,
+        size / 2,
+        size / 2,
+      );
+      grad.addColorStop(0, "rgba(255,255,255,1)");
+      grad.addColorStop(1, "rgba(255,255,255,0)");
+      gc.fillStyle = grad;
+      gc.fillRect(0, 0, size, size);
+    }
+
     function buildParticles() {
       cx = W / 2;
       cy = H / 2;
       const maxR = Math.max(W, H) * 0.6;
-      const COUNT = 800; // cut from 2200 — biggest perf win
+      const COUNT = isMobile ? 400 : 700;
       const STAR_RATIO = 0.05;
 
       particles = Array.from({ length: COUNT }, () => {
@@ -80,7 +126,6 @@ export default function SpiralCanvas() {
         const arm = Math.floor(Math.random() * 3) * ((Math.PI * 2) / 3);
         const angle = arm + armOffset + (Math.random() - 0.5) * 0.9;
         const isStar = Math.random() < STAR_RATIO;
-
         return {
           angle,
           radius,
@@ -103,6 +148,8 @@ export default function SpiralCanvas() {
       H = c!.height = c!.offsetHeight * dpr;
       buildParticles();
       buildGlowSprite();
+      buildCoreGlow();
+      buildPointerGlow();
     }
     resize();
     window.addEventListener("resize", resize);
@@ -110,12 +157,17 @@ export default function SpiralCanvas() {
     let t = 0;
     let galaxyRotation = 0;
     let frameId: number;
+    let lastTime = 0;
+    const FRAME_MS = 1000 / 60;
 
-    function draw() {
+    function draw(now: number) {
+      frameId = requestAnimationFrame(draw);
+      const delta = now - lastTime;
+      if (delta < FRAME_MS - 1) return;
+      lastTime = now - (delta % FRAME_MS);
+
       ctx!.clearRect(0, 0, W, H);
       t += 1;
-
-      // genuine whole-galaxy spin — visible, continuous
       galaxyRotation += 0.0011;
 
       pointer.strength += ((pointer.active ? 1 : 0) - pointer.strength) * 0.06;
@@ -125,23 +177,19 @@ export default function SpiralCanvas() {
 
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
-
         const totalAngle = p.angle + galaxyRotation;
         const cosA = Math.cos(totalAngle);
         const sinA = Math.sin(totalAngle);
         const baseX = cx + cosA * p.radius;
         const baseY = cy + sinA * p.radius * 0.6;
 
-        let fx = baseX;
-        let fy = baseY;
+        let fx = baseX,
+          fy = baseY;
 
-        // only do the (expensive-ish) lens math for particles that could
-        // plausibly be within range — cheap squared-distance pre-check
         if (lensActive) {
           const dx0 = baseX - pointer.x;
           const dy0 = baseY - pointer.y;
           const distSq = dx0 * dx0 + dy0 * dy0;
-
           if (distSq < lensRadiusSq) {
             const dist = Math.sqrt(distSq) || 0.001;
             const falloff = 1 - dist / lensRadius;
@@ -149,7 +197,6 @@ export default function SpiralCanvas() {
             const targetLensX = -(dx0 / dist) * pull;
             const targetLensY = -(dy0 / dist) * pull;
             const targetSwirl = falloff * falloff * 1.1 * pointer.strength;
-
             p.lensX += (targetLensX - p.lensX) * 0.08;
             p.lensY += (targetLensY - p.lensY) * 0.08;
             p.lensSwirl += (targetSwirl - p.lensSwirl) * 0.08;
@@ -158,14 +205,13 @@ export default function SpiralCanvas() {
             p.lensY *= 0.92;
             p.lensSwirl *= 0.92;
           }
-
           if (p.lensX !== 0 || p.lensY !== 0) {
             fx += p.lensX;
             fy += p.lensY;
           }
           if (p.lensSwirl > 0.001) {
-            const ddx = fx - pointer.x;
-            const ddy = fy - pointer.y;
+            const ddx = fx - pointer.x,
+              ddy = fy - pointer.y;
             const a = p.lensSwirl * 0.5;
             const c2 = Math.cos(a),
               s2 = Math.sin(a);
@@ -199,21 +245,11 @@ export default function SpiralCanvas() {
         ctx!.fill();
       }
 
-      // soft core glow — single gradient per frame, not per particle
-      const coreGlow = ctx!.createRadialGradient(
-        cx,
-        cy,
-        0,
-        cx,
-        cy,
-        Math.min(W, H) * 0.12,
-      );
-      coreGlow.addColorStop(0, "rgba(240,240,240,0.05)");
-      coreGlow.addColorStop(1, "rgba(240,240,240,0)");
-      ctx!.beginPath();
-      ctx!.fillStyle = coreGlow;
-      ctx!.arc(cx, cy, Math.min(W, H) * 0.12, 0, Math.PI * 2);
-      ctx!.fill();
+      // Use cached core glow sprite
+      if (coreGlowCanvas) {
+        const r = Math.min(W, H) * 0.12;
+        ctx!.drawImage(coreGlowCanvas, cx - r - 2, cy - r - 2);
+      }
 
       if (pointer.strength > 0.02) {
         ctx!.beginPath();
@@ -222,11 +258,11 @@ export default function SpiralCanvas() {
         ctx!.lineWidth = 0.6 * dpr;
         ctx!.stroke();
 
-        if (glowSprite) {
+        if (pointerGlow) {
           const gs = 24 * dpr;
           ctx!.globalAlpha = 0.25 * pointer.strength;
           ctx!.drawImage(
-            glowSprite,
+            pointerGlow,
             pointer.x - gs / 2,
             pointer.y - gs / 2,
             gs,
@@ -235,10 +271,8 @@ export default function SpiralCanvas() {
           ctx!.globalAlpha = 1;
         }
       }
-
-      frameId = requestAnimationFrame(draw);
     }
-    draw();
+    frameId = requestAnimationFrame(draw);
 
     return () => {
       window.removeEventListener("resize", resize);

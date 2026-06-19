@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 
 export default function Nav() {
   const pathname = usePathname();
-
   const isHome = pathname === "/";
   const isWork = pathname === "/work";
   const isAbout = pathname === "/about";

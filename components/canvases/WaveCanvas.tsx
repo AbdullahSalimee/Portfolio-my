@@ -20,7 +20,6 @@ export default function WaveCanvas() {
       buildGradients();
     }
 
-    // Pointer tracking — drives a subtle ripple distortion in the waves
     const pointer = { x: -9999, y: -9999, active: 0 };
     function onMove(e: MouseEvent) {
       const rect = c!.getBoundingClientRect();
@@ -57,7 +56,7 @@ export default function WaveCanvas() {
         phase: i * 1.3,
         shade: 0.12 + depth * 0.5,
         width: 0.6 + depth * 1.1,
-        isRed: i === 1, // Second layer gets red tint
+        isRed: i === 1,
       };
     });
 
@@ -66,9 +65,9 @@ export default function WaveCanvas() {
         const grad = ctx!.createLinearGradient(0, 0, W, 0);
         if (layer.isRed) {
           const s = layer.shade;
-          grad.addColorStop(0, `rgba(255, 180, 160, ${s * 0.15})`);
-          grad.addColorStop(0.5, `rgba(255, 150, 130, ${s})`);
-          grad.addColorStop(1, `rgba(255, 180, 160, ${s * 0.15})`);
+          grad.addColorStop(0, `rgba(200,40,40,${s * 0.15})`);
+          grad.addColorStop(0.5, `rgba(200,40,40,${s * 0.7})`);
+          grad.addColorStop(1, `rgba(200,40,40,${s * 0.15})`);
         } else {
           const s = layer.shade;
           grad.addColorStop(0, `rgba(240,240,240,${s * 0.15})`);
@@ -92,7 +91,7 @@ export default function WaveCanvas() {
       alpha: number;
       isRed?: boolean;
     };
-    const PCOUNT = 36;
+    const PCOUNT = 28; // reduced from 36
     const particles: Particle[] = Array.from({ length: PCOUNT }, (_, i) => ({
       x: Math.random(),
       y: Math.random() * 0.5,
@@ -101,11 +100,10 @@ export default function WaveCanvas() {
       bob: 4 + Math.random() * 10,
       bobPhase: Math.random() * Math.PI * 2,
       alpha: 0.05 + Math.random() * 0.22,
-      isRed: i % 6 === 0, // Every 6th particle is red
+      isRed: i % 8 === 0, // fewer red particles — more tasteful
     }));
 
-    // Pre-rendered grain tile — drawn once, reused every frame instead
-    // of generating random noise per pixel each draw call.
+    // Pre-rendered grain tile
     const grainCanvas = document.createElement("canvas");
     grainCanvas.width = 128;
     grainCanvas.height = 128;
@@ -124,7 +122,6 @@ export default function WaveCanvas() {
         Math.sin(x * layer.freq * 0.45 - t * layer.speed * 0.7 + layer.phase) *
           0.15;
       let y = layer.baseY * H + n * layer.amp * dpr;
-
       const dist = Math.abs(x - pointer.x);
       const radius = 220 * dpr;
       if (pointer.active && dist < radius) {
@@ -136,13 +133,20 @@ export default function WaveCanvas() {
 
     let t = 0;
     let frameId: number;
+    let lastTime = 0;
+    const FRAME_MS = 1000 / 60;
 
-    function draw() {
+    function draw(now: number) {
+      frameId = requestAnimationFrame(draw);
+      const delta = now - lastTime;
+      if (delta < FRAME_MS - 1) return;
+      lastTime = now - (delta % FRAME_MS);
+
       ctx!.clearRect(0, 0, W, H);
       t += 0.012;
 
+      const step = 8 * dpr; // increased step size from 6 = fewer segments, same look
       layers.forEach((layer) => {
-        const step = 6 * dpr;
         ctx!.beginPath();
         for (let x = 0; x <= W; x += step) {
           const y = waveY(layer, x, t);
@@ -160,7 +164,7 @@ export default function WaveCanvas() {
         const y = p.y * H * 0.7 + Math.sin(t * 0.6 + p.bobPhase) * p.bob * dpr;
         ctx!.beginPath();
         if (p.isRed) {
-          ctx!.fillStyle = `rgba(255, 150, 130, ${p.alpha * 1.5})`;
+          ctx!.fillStyle = `rgba(200,40,40,${p.alpha * 1.2})`;
         } else {
           ctx!.fillStyle = `rgba(240,240,240,${p.alpha})`;
         }
@@ -174,10 +178,8 @@ export default function WaveCanvas() {
         ctx!.fillStyle = grainPattern;
         ctx!.fillRect(0, 0, W, H);
       }
-
-      frameId = requestAnimationFrame(draw);
     }
-    draw();
+    frameId = requestAnimationFrame(draw);
 
     return () => {
       window.removeEventListener("resize", resize);

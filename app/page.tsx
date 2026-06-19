@@ -14,7 +14,6 @@ export default function Home() {
     <>
       <CustomCursor />
       <Frame />
-
       <Nav />
 
       <div className="snap-container" id="snap">
@@ -31,15 +30,15 @@ export default function Home() {
               Frontend Engineer &amp; UI Architect
             </div>
           </div>
-          <div className="hero-sub">
+          <div className="hero-sub lg:block hidden ">
             Here&apos;s my approach, whether it&apos;s building
             <br />
             interfaces or intelligent systems.
           </div>
           <div className="hero-tagline">
-            Build<span className="text-red-400">.</span> Integrate
-            <span className="text-red-400">.</span> Ship
-            <span className="text-red-400">.</span>
+            Build<span className="dot">.</span> Integrate
+            <span className="dot">.</span> Ship
+            <span className="dot">.</span>
           </div>
         </div>
 
@@ -54,8 +53,7 @@ export default function Home() {
             everything.
           </div>
           <div className="section-quote">
-            Consistency is the foundation of{" "}
-            <span className="text-red-400">trust</span>
+            Consistency is the foundation of <span className="red">trust</span>
           </div>
         </div>
 
@@ -71,8 +69,8 @@ export default function Home() {
             That&apos;s still on us.
           </div>
           <div className="section-quote">
-            Do we need <span className="text-red-400">code</span>..? or{" "}
-            <span className="text-red-400">experiences</span>?
+            Do we need <span className="red">code</span>..? or{" "}
+            <span className="red">experiences</span>?
           </div>
         </div>
 
@@ -85,7 +83,7 @@ export default function Home() {
             Building with <strong>adaptability</strong> baked in.
           </div>
           <div className="section-quote">
-            <span className="text-red-400">Cause</span> &amp; Effect
+            <span className="red">Cause</span> &amp; Effect
           </div>
         </div>
 
@@ -100,8 +98,8 @@ export default function Home() {
             <strong>Sounds interesting? Let&apos;s connect..</strong>
           </div>
           <div className="section-quote">
-            You bring the <span className="text-red-400">vision</span>,
-            I&apos;ll build the thing
+            You bring the <span className="red">vision</span>, I&apos;ll build
+            the thing
           </div>
         </div>
       </div>

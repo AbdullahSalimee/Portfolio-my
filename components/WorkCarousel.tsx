@@ -30,7 +30,12 @@ export default function WorkCarousel() {
         <SkillsBubbles skills={w.skills} key={current} />
       </div>
       <div className="carousel-controls">
-        <button className="carousel-btn" id="prev-btn" onClick={() => showWork(current - 1)} aria-label="Previous">
+        <button
+          className="carousel-btn"
+          id="prev-btn"
+          onClick={() => showWork(current - 1)}
+          aria-label="Previous"
+        >
           &#8592;
         </button>
         <div className="carousel-dots" id="dots">
@@ -42,7 +47,12 @@ export default function WorkCarousel() {
             ></div>
           ))}
         </div>
-        <button className="carousel-btn" id="next-btn" onClick={() => showWork(current + 1)} aria-label="Next">
+        <button
+          className="carousel-btn"
+          id="next-btn"
+          onClick={() => showWork(current + 1)}
+          aria-label="Next"
+        >
           &#8594;
         </button>
       </div>

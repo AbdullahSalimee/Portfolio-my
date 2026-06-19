@@ -14,16 +14,16 @@ export default function WorkPage() {
       <Nav />
 
       <div className="snap-container" id="snap">
-        {/* WORK */}
         <div className="page" id="work-page">
           <WorkCarousel />
         </div>
-
-        {/* SKILLS */}
         <div className="page" id="skills-page">
           <SkillsGrid />
           <div className="skills-heading">
-            <div className="section-quote" style={{ position: "static", bottom: "auto", left: "auto" }}>
+            <div
+              className="section-quote"
+              style={{ position: "static", bottom: "auto", left: "auto" }}
+            >
               The Stack
             </div>
           </div>

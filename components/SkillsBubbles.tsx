@@ -23,10 +23,12 @@ export default function SkillsBubbles({ skills }: { skills: string[] }) {
     const ctx = c.getContext("2d");
     if (!ctx) return;
 
-    c.width = c.offsetWidth;
-    c.height = c.offsetHeight;
-    const W = c.width,
-      H = c.height;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    c.width = c.offsetWidth * dpr;
+    c.height = c.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
+    const W = c.offsetWidth,
+      H = c.offsetHeight;
 
     const bubbles: Bubble[] = skills.map((s, i) => {
       const angle = (i / skills.length) * Math.PI * 2 - Math.PI / 2;
@@ -43,7 +45,15 @@ export default function SkillsBubbles({ skills }: { skills: string[] }) {
       };
     });
 
-    function draw() {
+    let lastTime = 0;
+    const FRAME_MS = 1000 / 60;
+
+    function draw(now: number) {
+      animRef.current = requestAnimationFrame(draw);
+      const delta = now - lastTime;
+      if (delta < FRAME_MS - 1) return;
+      lastTime = now - (delta % FRAME_MS);
+
       ctx!.clearRect(0, 0, W, H);
       bubbles.forEach((b) => {
         b.x += b.vx;
@@ -67,10 +77,8 @@ export default function SkillsBubbles({ skills }: { skills: string[] }) {
         ctx!.fillText(b.label.length > 8 ? b.label.slice(0, 8) : b.label, 0, 0);
         ctx!.restore();
       });
-      animRef.current = requestAnimationFrame(draw);
     }
-
-    draw();
+    animRef.current = requestAnimationFrame(draw);
 
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);

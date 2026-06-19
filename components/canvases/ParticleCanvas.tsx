@@ -41,11 +41,8 @@ export default function ParticleCanvas() {
       t = 0;
 
     // Cached gradient objects — rebuilt only on resize
-    let outerGlowGrad: RadialGradient | null = null;
-    let diskGrad: CanvasGradient | null = null;
-    // Pre-built offscreen canvas for the accretion disk (rebuilt on resize)
+    let outerGlowGrad: CanvasGradient | null = null;
     let diskCanvas: HTMLCanvasElement | null = null;
-    let diskCtx: CanvasRenderingContext2D | null = null;
 
     function resize() {
       W = c!.width = c!.offsetWidth * dpr;
@@ -71,23 +68,20 @@ export default function ParticleCanvas() {
       outerGlowGrad.addColorStop(0.3, "rgba(190,210,255,0.06)");
       outerGlowGrad.addColorStop(1, "rgba(190,210,255,0)");
 
-      // Pre-render the static parts of the accretion disk to an offscreen canvas
-      // We'll just spin this with a transform instead of redrawing 56 gradients/frame
       const size = Math.round(disk * 2.8);
       diskCanvas = document.createElement("canvas");
       diskCanvas.width = size * 2;
       diskCanvas.height = size * 2;
-      diskCtx = diskCanvas.getContext("2d");
-      if (!diskCtx) return;
-      const dc = diskCtx;
+      const dc = diskCanvas.getContext("2d");
+      if (!dc) return;
       const ox = size,
         oy = size;
-
       const tilt = 0.34;
+
       for (let pass = 0; pass < 2; pass++) {
         const startA = pass === 0 ? Math.PI : 0;
         const endA = pass === 0 ? Math.PI * 2 : Math.PI;
-        const segs = 36; // reduced from 56 — imperceptible difference
+        const segs = 36;
         for (let i = 0; i < segs; i++) {
           const a0 = startA + ((endA - startA) * i) / segs;
           const a1 = startA + ((endA - startA) * (i + 1)) / segs;
@@ -135,7 +129,8 @@ export default function ParticleCanvas() {
     resize();
     window.addEventListener("resize", resize);
 
-    // Sparse starfield
+    // Sparse starfield — pre-baked into an offscreen canvas, redrawn only on resize
+    let starCanvas: HTMLCanvasElement | null = null;
     const stars = Array.from({ length: 50 }, () => ({
       x: Math.random(),
       y: Math.random(),
@@ -143,6 +138,20 @@ export default function ParticleCanvas() {
       phase: Math.random() * Math.PI * 2,
       speed: 0.6 + Math.random() * 1.2,
     }));
+
+    function buildStarCanvas() {
+      starCanvas = document.createElement("canvas");
+      starCanvas.width = W;
+      starCanvas.height = H;
+      const sc = starCanvas.getContext("2d")!;
+      sc.fillStyle = "rgba(225,235,255,1)";
+      stars.forEach((s) => {
+        sc.beginPath();
+        sc.arc(s.x * W, s.y * H, s.r * dpr, 0, Math.PI * 2);
+        sc.fill();
+      });
+    }
+    buildStarCanvas();
 
     const orbits: Orbit[] = TECHS.map((name, i) => {
       const tier = i < 4 ? 0 : i < 8 ? 1 : 2;
@@ -160,16 +169,7 @@ export default function ParticleCanvas() {
     const redNodes = new Set([8, 9, 10]);
 
     function drawStars() {
-      // Batch all stars in one fill per alpha group — approximate by drawing all at once
-      stars.forEach((s) => {
-        const twinkle =
-          0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 18 * s.speed + s.phase));
-        ctx!.globalAlpha = twinkle * 0.5;
-        ctx!.beginPath();
-        ctx!.arc(s.x * W, s.y * H, s.r * dpr, 0, Math.PI * 2);
-        ctx!.fill();
-      });
-      ctx!.globalAlpha = 1;
+      if (starCanvas) ctx!.drawImage(starCanvas, 0, 0);
     }
 
     function drawBlackHole() {
@@ -179,7 +179,6 @@ export default function ParticleCanvas() {
       const disk = 46 * dpr;
       const spin = t * 0.6;
 
-      // Outer glow — cached gradient, no per-frame creation
       if (outerGlowGrad) {
         ctx!.beginPath();
         ctx!.fillStyle = outerGlowGrad;
@@ -187,7 +186,6 @@ export default function ParticleCanvas() {
         ctx!.fill();
       }
 
-      // Draw pre-rendered disk rotated via transform
       if (diskCanvas) {
         const size = diskCanvas.width / 2;
         ctx!.save();
@@ -197,7 +195,6 @@ export default function ParticleCanvas() {
         ctx!.restore();
       }
 
-      // Front core cover (always on top of disk)
       ctx!.save();
       ctx!.translate(cx, cy);
       ctx!.beginPath();
@@ -224,11 +221,9 @@ export default function ParticleCanvas() {
     }
 
     function drawOrbitRings() {
-      // Batch all orbit rings into one path
       ctx!.beginPath();
       orbits.forEach((o) => {
         for (let i = 0; i <= 80; i++) {
-          // reduced from 120
           const a = (i / 80) * Math.PI * 2;
           const x = W / 2 + Math.cos(a) * o.r * dpr;
           const y = H / 2 + Math.sin(a) * o.r * o.tilt * dpr;
@@ -252,9 +247,9 @@ export default function ParticleCanvas() {
         const isRed = redNodes.has(idx);
 
         o.trail.unshift({ x, y, a: alpha });
-        if (o.trail.length > 8) o.trail.pop(); // reduced from 10
+        if (o.trail.length > 6) o.trail.pop();
 
-        // Trail — batch per color
+        // Batch trail segments by color to reduce strokeStyle switches
         for (let i = o.trail.length - 1; i > 0; i--) {
           const p0 = o.trail[i],
             p1 = o.trail[i - 1];
@@ -263,21 +258,19 @@ export default function ParticleCanvas() {
           ctx!.moveTo(p0.x, p0.y);
           ctx!.lineTo(p1.x, p1.y);
           ctx!.strokeStyle = isRed
-            ? `rgba(255,140,110,${fade})`
+            ? `rgba(220,60,60,${fade})`
             : `rgba(225,235,255,${fade})`;
           ctx!.lineWidth = (0.4 + depth * 1.1) * dpr;
           ctx!.stroke();
         }
 
-        // Node dot — skip gradient glow, just draw a dot with alpha
         ctx!.beginPath();
         ctx!.fillStyle = isRed
-          ? `rgba(255,190,160,${alpha})`
+          ? `rgba(220,80,80,${alpha})`
           : `rgba(255,255,255,${alpha})`;
         ctx!.arc(x, y, (1.6 + depth * 1.6) * dpr, 0, Math.PI * 2);
         ctx!.fill();
 
-        // Connector tick
         const dirX = Math.cos(o.angle),
           dirY = Math.sin(o.angle) * o.tilt;
         const dirLen = Math.hypot(dirX, dirY) || 1;
@@ -290,12 +283,11 @@ export default function ParticleCanvas() {
         ctx!.moveTo(x, y);
         ctx!.lineTo(lx, ly);
         ctx!.strokeStyle = isRed
-          ? `rgba(255,160,130,${alpha * 0.45})`
+          ? `rgba(220,60,60,${alpha * 0.45})`
           : `rgba(225,235,255,${alpha * 0.35})`;
         ctx!.lineWidth = 0.5 * dpr;
         ctx!.stroke();
 
-        // Label
         ctx!.textBaseline = "middle";
         const pad = 7 * dpr;
         const flipFade = Math.min(1, Math.abs(ux) / 0.18);
@@ -314,19 +306,24 @@ export default function ParticleCanvas() {
     }
 
     let frameId: number;
-    // Star color set once
-    ctx.fillStyle = "rgba(225,235,255,1)";
+    let lastTime = 0;
+    const TARGET_FPS = 60;
+    const FRAME_MS = 1000 / TARGET_FPS;
 
-    function draw() {
+    function draw(now: number) {
+      frameId = requestAnimationFrame(draw);
+      const delta = now - lastTime;
+      if (delta < FRAME_MS - 1) return; // skip frame if too soon
+      lastTime = now - (delta % FRAME_MS);
+
       ctx!.clearRect(0, 0, W, H);
       t += 0.006;
       drawStars();
       drawOrbitRings();
       drawBlackHole();
       drawNodes();
-      frameId = requestAnimationFrame(draw);
     }
-    draw();
+    frameId = requestAnimationFrame(draw);
 
     return () => {
       window.removeEventListener("resize", resize);

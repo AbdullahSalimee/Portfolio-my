@@ -14,9 +14,12 @@ export default function WorkPage() {
       <Nav />
 
       <div className="snap-container" id="snap">
-        <div className="page" id="work-page">
+        {/* WORK */}
+        <div className="page" id="work-page" style={{ paddingBottom: 40 }}>
           <WorkCarousel />
         </div>
+
+        {/* SKILLS */}
         <div className="page" id="skills-page">
           <SkillsGrid />
           <div className="skills-heading">

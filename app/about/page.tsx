@@ -41,7 +41,7 @@ export default function AboutPage() {
 
               <div className="socials">
                 <a
-                  href="https://github.com"
+                  href="https://github.com/AbdullahSalimee"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -54,7 +54,7 @@ export default function AboutPage() {
                 >
                   LinkedIn ↗
                 </a>
-                <a href="mailto:hello@abdullahsalimee.dev">Email ↗</a>
+                <a href="mailto:abdullahsalimee@gmail.com">Email ↗</a>
               </div>
             </div>
 

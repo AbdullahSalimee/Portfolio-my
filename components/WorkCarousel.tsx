@@ -361,8 +361,13 @@ function SkillBubblesCanvas({
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
-    const ctx = c.getContext("2d");
-    if (!ctx) return;
+    const ctx2d = c.getContext("2d");
+    if (!ctx2d) return;
+    // Re-bind to a fresh const so TypeScript locks in the non-null type.
+    // (TS can't narrow `ctx2d` across the nested `draw` closure below,
+    // since it can't prove the value isn't reassigned before the closure
+    // runs inside requestAnimationFrame.)
+    const ctx = ctx2d;
 
     c.width = c.offsetWidth;
     c.height = c.offsetHeight;

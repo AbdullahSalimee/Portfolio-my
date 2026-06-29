@@ -2,9 +2,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Abdullah Salimee — Frontend Engineer",
+  title: "Abdullah Salimee — Full-Stack Developer",
   description:
-    "Frontend Engineer & UI Architect specializing in React, Next.js, Svelte, and AI-powered workflows with n8n, Supabase, and AI agents.",
+    "Full-Stack Developer specializing in React, Next.js, Svelte, Supabase, and AI-powered workflows with n8n, LangChain, and OpenAI.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

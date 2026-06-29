@@ -5,9 +5,7 @@ export const metadata: Metadata = {
   title: "Abdullah Salimee — Full-Stack Developer",
   description:
     "Full-Stack Developer specializing in React, Next.js, Svelte, Supabase, and AI-powered workflows with n8n, LangChain, and OpenAI.",
-  icons: {
-    icon: "/favicon.svg",
-  },
+ 
 };
 
 export default function RootLayout({

@@ -683,7 +683,7 @@ export default function WorkCarousel() {
   // auto-advance every 2s
   useEffect(() => {
     if (overlayOpen) return;
-    timerRef.current = setTimeout(() => go(1), 1000000000);
+    timerRef.current = setTimeout(() => go(1), 5000);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };

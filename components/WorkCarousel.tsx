@@ -133,7 +133,7 @@ const CARDS: CardItem[] = [
     url: "https://ams-ruddy-five.vercel.app/",
   },
   {
-    id: "gh-6",
+    id: "gh-7",
     type: "github",
     index: 9,
     title: "Continental",

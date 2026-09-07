@@ -76,7 +76,7 @@ const CARDS: CardItem[] = [
       "Ploty.js",
     ],
     Githuburl: "https://github.com/AbdullahSalimee/graphix",
-    url: "https://graphix.devlinesolutions.com/",
+    url: "https://graphix-pro.netlify.app/",
   },
   {
     id: "gh-4",
@@ -142,7 +142,6 @@ const CARDS: CardItem[] = [
     desc: "Continental is a collaborative project built with Next.js, CSS, and JavaScript. It provides a comprehensive solution for managing educational institutions, including student enrollment, course management, attendance tracking, and performance analysis. The system is designed to streamline administrative tasks and enhance the overall learning experience.",
     skills: ["Next.js", "Tailwind CSS", "JavaScript"],
     Githuburl: "https://github.com/AbdullahSalimee/Continental",
-  
   },
 
   // ── JOBS ──────────────────────────────────────────────────────────────────
